@@ -368,8 +368,29 @@ export async function getDashboard(): Promise<DashboardMetrics> {
     if (!response.ok) {
       return mockDashboard;
     }
-    const data = (await response.json()) as DashboardMetrics;
-    return data ?? mockDashboard;
+    const data = (await response.json()) as
+      | DashboardMetrics
+      | {
+          success?: boolean;
+          summary?: Record<string, unknown>;
+        };
+
+    if (data && typeof data === "object" && "summary" in data) {
+      const summary = data.summary ?? {};
+      return {
+        totalLeads: Number(summary.total_leads ?? 0),
+        activeCampaigns: Number(summary.active_campaigns ?? 0),
+        adSpend: Number(summary.ad_spend ?? 0),
+        revenue: Number(summary.monthly_revenue ?? 0),
+        costPerLead: Number(summary.cost_per_lead ?? 0),
+        roas: Number(summary.roas ?? 0),
+        spendOverTime: mockDashboard.spendOverTime,
+        leadsOverTime: mockDashboard.leadsOverTime,
+        conversionTrend: mockDashboard.conversionTrend,
+      };
+    }
+
+    return (data as DashboardMetrics) ?? mockDashboard;
   } catch (error) {
     console.warn("Dashboard fetch failed:", toErrorMessage(error));
     return mockDashboard;
