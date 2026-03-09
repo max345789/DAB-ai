@@ -384,6 +384,7 @@ export async function getDashboard(): Promise<DashboardMetrics> {
         revenue: Number(summary.monthly_revenue ?? 0),
         costPerLead: Number(summary.cost_per_lead ?? 0),
         roas: Number(summary.roas ?? 0),
+        recentActions: mockDashboard.recentActions,
         spendOverTime: mockDashboard.spendOverTime,
         leadsOverTime: mockDashboard.leadsOverTime,
         conversionTrend: mockDashboard.conversionTrend,
