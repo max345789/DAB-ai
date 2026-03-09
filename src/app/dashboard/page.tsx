@@ -10,57 +10,68 @@ import { getDashboard } from "@/lib/api";
 
 export default async function DashboardPage() {
   const metrics = await getDashboard();
+  const safeNumber = (value: number | null | undefined) => {
+    const resolved = Number(value);
+    return Number.isFinite(resolved) ? resolved : 0;
+  };
+
+  const totalLeads = safeNumber(metrics.totalLeads);
+  const activeCampaigns = safeNumber(metrics.activeCampaigns);
+  const adSpend = safeNumber(metrics.adSpend);
+  const revenue = safeNumber(metrics.revenue);
+  const costPerLead = safeNumber(metrics.costPerLead);
+  const roas = safeNumber(metrics.roas);
 
   const metricCards = [
     {
       label: "Total Leads",
-      value: metrics.totalLeads.toLocaleString(),
+      value: totalLeads.toLocaleString(),
       change: "+12%",
       trend: [12, 16, 18, 22, 20, 24, 28],
       href: "/leads",
     },
     {
       label: "Active Campaigns",
-      value: metrics.activeCampaigns.toString(),
+      value: activeCampaigns.toString(),
       change: "+6%",
       trend: [3, 4, 4, 5, 6, 6, 6],
       href: "/campaigns",
     },
     {
       label: "Ad Spend",
-      value: `$${metrics.adSpend.toLocaleString()}`,
+      value: `$${adSpend.toLocaleString()}`,
       change: "+4.5%",
       trend: [2800, 3000, 3200, 3400, 3600, 3800, 3900],
       href: "/finance",
     },
     {
       label: "Revenue",
-      value: `$${metrics.revenue.toLocaleString()}`,
+      value: `$${revenue.toLocaleString()}`,
       change: "+9.8%",
       trend: [6200, 7000, 7300, 7600, 7900, 8200, 8800],
       href: "/finance",
     },
     {
       label: "Cost per Lead",
-      value: `$${metrics.costPerLead.toFixed(2)}`,
+      value: `$${costPerLead.toFixed(2)}`,
       change: "-2.1%",
       trend: [22, 21, 20, 19, 18.5, 18.2, 18.6],
       href: "/finance",
     },
     {
       label: "ROAS",
-      value: `${metrics.roas.toFixed(2)}x`,
+      value: `${roas.toFixed(2)}x`,
       change: "+0.3x",
       trend: [2.1, 2.3, 2.4, 2.6, 2.7, 2.7, 2.75],
       href: "/finance",
     },
   ];
 
-  const spendChart = metrics.spendOverTime.map((point) => ({
+  const spendChart = (metrics.spendOverTime ?? []).map((point) => ({
     date: point.date,
     value: point.spend,
   }));
-  const leadsChart = metrics.leadsOverTime.map((point) => ({
+  const leadsChart = (metrics.leadsOverTime ?? []).map((point) => ({
     date: point.date,
     value: point.leads,
   }));
