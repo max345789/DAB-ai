@@ -167,16 +167,10 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
-// ── API Routes (Stage 5 first — auth before everything) ───────
+// ── API Routes (Public + Core) ────────────────────────────────
+// Note: auth-protected routers are mounted after public routes
+// so they don't block non-auth endpoints (frontend has no auth yet).
 app.use('/api', authRoutes);
-app.use('/api', agentRoutes);
-app.use('/api', automationRoutes);
-app.use('/api', integrationRoutes);
-
-// ── API Routes (Stage 6) ──────────────────────────────────────
-app.use('/api', reportsRoutes);
-
-// ── API Routes (Stages 1-4) ───────────────────────────────────
 app.use('/api', chatRoutes);
 app.use('/api', leadRoutes);
 app.use('/api', dashboardRoutes);
@@ -184,6 +178,12 @@ app.use('/api', campaignRoutes);
 app.use('/api', followupRoutes);
 app.use('/api', meetingRoutes);
 app.use('/api', financeRoutes);
+
+// ── API Routes (Auth-protected) ───────────────────────────────
+app.use('/api', agentRoutes);
+app.use('/api', automationRoutes);
+app.use('/api', integrationRoutes);
+app.use('/api', reportsRoutes);
 
 // ── 404 Fallback ──────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: 'Route not found' }));
