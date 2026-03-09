@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "build:production": "npm run typecheck && npm run build"
+    "build:production": "npm run typecheck && npm run build",
+    "smoke:prod": "./scripts/smoke-prod.sh",
+    "smoke:prod:custom": "./scripts/smoke-prod.sh"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
