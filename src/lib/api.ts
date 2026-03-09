@@ -360,6 +360,75 @@ function toErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function normalizeLead(raw: Record<string, unknown>): Lead {
+  const score = Number(raw.score ?? 0);
+  const tier = String(raw.score_tier ?? "").toLowerCase();
+  const status: LeadStatus =
+    tier === "hot" || tier === "warm" || tier === "cold"
+      ? (tier as LeadStatus)
+      : score >= 80
+        ? "hot"
+        : score >= 50
+          ? "warm"
+          : "cold";
+
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? "Unknown"),
+    email: String(raw.email ?? ""),
+    company: String(raw.company ?? ""),
+    source: String(raw.source ?? raw.channel ?? "Unknown"),
+    status,
+    leadScore: score,
+    meetingStatus: "pending",
+    attribution: String(raw.campaign_id ?? "Unassigned"),
+    createdAt: String(raw.createdat ?? ""),
+    budget: raw.budget != null ? `$${raw.budget}` : undefined,
+    message: raw.message != null ? String(raw.message) : undefined,
+  };
+}
+
+function normalizeCampaign(raw: Record<string, unknown>): Campaign {
+  const platformRaw = String(raw.platform ?? "").toLowerCase();
+  const platform: Campaign["platform"] =
+    platformRaw === "google"
+      ? "Google"
+      : platformRaw === "linkedin"
+        ? "LinkedIn"
+        : "Meta";
+
+  const goalRaw = String(raw.goal ?? "");
+  const goal: Campaign["goal"] =
+    goalRaw === "Traffic" || goalRaw === "Sales" ? goalRaw : "Lead Generation";
+
+  const dailyBudget = Number(raw.daily_budget ?? raw.dailyBudget ?? raw.budget ?? 0);
+  const leadsGenerated = Number(raw.leads_generated ?? raw.leadsGenerated ?? 0);
+  const spend = Number(raw.spend_so_far ?? raw.spend ?? 0);
+  const costPerLead =
+    Number(raw.cpl ?? raw.cost_per_lead ?? raw.costPerLead ?? 0) ||
+    (leadsGenerated > 0 ? spend / leadsGenerated : 0);
+
+  return {
+    id: String(raw.id ?? ""),
+    name: String(raw.name ?? "Untitled Campaign"),
+    platform,
+    dailyBudget,
+    status: (String(raw.status ?? "draft") as CampaignStatus) || "draft",
+    leadsGenerated,
+    spend,
+    costPerLead,
+    conversionRate: Number(raw.conversion_rate ?? raw.conversionRate ?? 0),
+    createdAt: String(raw.createdat ?? raw.createdAt ?? ""),
+    spendOverTime: [],
+    leadsPerDay: [],
+    audience: raw.target_audience != null ? JSON.stringify(raw.target_audience) : undefined,
+    productService: raw.product_service != null ? String(raw.product_service) : undefined,
+    location: raw.location != null ? String(raw.location) : undefined,
+    goal,
+    generatedAd: undefined,
+  };
+}
+
 export async function getDashboard(): Promise<DashboardMetrics> {
   try {
     const response = await fetch(`${API_BASE}/dashboard/summary`, {
@@ -404,8 +473,22 @@ export async function getLeads(): Promise<Lead[]> {
     if (!response.ok) {
       return mockLeads;
     }
-    const data = (await response.json()) as Lead[];
-    return data ?? mockLeads;
+    const data = (await response.json()) as
+      | Lead[]
+      | {
+          leads?: Record<string, unknown>[];
+        };
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    const rawLeads = data?.leads;
+    if (Array.isArray(rawLeads)) {
+      return rawLeads.map(normalizeLead);
+    }
+
+    return mockLeads;
   } catch (error) {
     console.warn("Leads fetch failed:", toErrorMessage(error));
     return mockLeads;
@@ -436,8 +519,22 @@ export async function getCampaigns(): Promise<Campaign[]> {
     if (!response.ok) {
       return mockCampaigns;
     }
-    const data = (await response.json()) as Campaign[];
-    return data ?? mockCampaigns;
+    const data = (await response.json()) as
+      | Campaign[]
+      | {
+          campaigns?: Record<string, unknown>[];
+        };
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    const rawCampaigns = data?.campaigns;
+    if (Array.isArray(rawCampaigns)) {
+      return rawCampaigns.map(normalizeCampaign);
+    }
+
+    return mockCampaigns;
   } catch (error) {
     console.warn("Campaigns fetch failed:", toErrorMessage(error));
     return mockCampaigns;
@@ -533,8 +630,37 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
     if (!response.ok) {
       return mockFinanceSummary;
     }
-    const data = (await response.json()) as FinanceSummary;
-    return data ?? mockFinanceSummary;
+    const data = (await response.json()) as
+      | FinanceSummary
+      | {
+          finance_summary?: Record<string, unknown>;
+        };
+
+    if (data && typeof data === "object" && "finance_summary" in data) {
+      const summary = data.finance_summary ?? {};
+      return {
+        totalAdSpend: Number(summary.total_spend ?? 0),
+        totalRevenue: Number(summary.total_revenue ?? 0),
+        costPerLead: Number(summary.cost_per_lead ?? 0),
+        roas: Number(summary.roas ?? 0),
+        spendOverTime: mockFinanceSummary.spendOverTime,
+        spendVsRevenue: mockFinanceSummary.spendVsRevenue,
+        campaignProfitability: mockFinanceSummary.campaignProfitability,
+      };
+    }
+
+    if (
+      data &&
+      typeof data === "object" &&
+      "totalAdSpend" in data &&
+      "totalRevenue" in data &&
+      "costPerLead" in data &&
+      "roas" in data
+    ) {
+      return data as FinanceSummary;
+    }
+
+    return mockFinanceSummary;
   } catch (error) {
     console.warn("Finance summary fetch failed:", toErrorMessage(error));
     return mockFinanceSummary;
