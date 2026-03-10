@@ -26,30 +26,65 @@ if (PROVIDER === 'openai' && OpenAI) {
 }
 
 // ── Core AI call (provider-agnostic) ─────────────────────────
-async function callAI(systemPrompt, userPrompt) {
-  if (PROVIDER === 'anthropic' && anthropicClient) {
-    const msg = await anthropicClient.messages.create({
-      model     : process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system    : systemPrompt,
-      messages  : [{ role: 'user', content: userPrompt }],
-    });
-    return msg.content[0].text.trim();
+async function callAI(systemPrompt, userPrompt, opts = {}) {
+  const maxTokens = Number(opts.maxTokens || 1024);
+
+  try {
+    if (PROVIDER === 'anthropic' && anthropicClient) {
+      const msg = await anthropicClient.messages.create({
+        model     : process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
+        max_tokens: maxTokens,
+        system    : systemPrompt,
+        messages  : [{ role: 'user', content: userPrompt }],
+      });
+      return msg.content?.[0]?.text?.trim() || null;
+    }
+
+    if (PROVIDER === 'openai' && openaiClient) {
+      const completion = await openaiClient.chat.completions.create({
+        model   : process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt   },
+        ],
+        max_tokens: maxTokens,
+      });
+      return completion.choices?.[0]?.message?.content?.trim() || null;
+    }
+  } catch (err) {
+    console.warn('[aiService] provider call failed:', err.message);
   }
 
-  if (PROVIDER === 'openai' && openaiClient) {
-    const completion = await openaiClient.chat.completions.create({
-      model   : process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt   },
-      ],
-      max_tokens: 1024,
-    });
-    return completion.choices[0].message.content.trim();
+  return null; // triggers fallback behavior in caller
+}
+
+function templateChatReply(message) {
+  return `I can help with campaigns, leads, follow-ups, meetings, and finance.
+
+You said: "${message}"
+
+Tell me what you want next and I will execute it step by step.`;
+}
+
+async function generateChatReply(message) {
+  const systemPrompt = `You are DAB AI, an autonomous marketing assistant.
+Give concise, practical responses for campaign management, lead follow-up, scheduling, finance tracking, and automation.
+If user asks for an action, return a direct action-oriented response in plain text.`;
+
+  const reply = await callAI(systemPrompt, message, { maxTokens: 400 });
+  if (reply) {
+    return {
+      reply,
+      source: PROVIDER,
+      used_fallback: false,
+    };
   }
 
-  return null; // triggers rule-based fallback
+  return {
+    reply: templateChatReply(message),
+    source: 'fallback',
+    used_fallback: true,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -256,6 +291,8 @@ module.exports = {
   scoreLead,
   generateFollowUp,
   suggestMeeting,
+  generateChatReply,
   scoreTier,
   PROVIDER,
+  _callAI: callAI,
 };

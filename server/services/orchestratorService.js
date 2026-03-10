@@ -19,24 +19,28 @@ if (process.env.ANTHROPIC_API_KEY) {
 }
 
 async function callAI(systemPrompt, userPrompt) {
-  if (PROVIDER === 'anthropic') {
-    const msg = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }]
-    });
-    return msg.content[0].text;
-  }
-  if (PROVIDER === 'openai') {
-    const res = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ]
-    });
-    return res.choices[0].message.content;
+  try {
+    if (PROVIDER === 'anthropic') {
+      const msg = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      });
+      return msg.content?.[0]?.text || null;
+    }
+    if (PROVIDER === 'openai') {
+      const res = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
+      });
+      return res.choices?.[0]?.message?.content || null;
+    }
+  } catch (err) {
+    logger.warn('ORCHESTRATOR', 'Provider call failed, using fallback', { error: err.message, provider: PROVIDER });
   }
   return null; // fallback handled by caller
 }
@@ -129,6 +133,8 @@ async function processCommand(command, userId = null, context = {}) {
   logger.info('ORCHESTRATOR', `Command received: "${command}"`, { intent, userId });
 
   let task, decision, reply, subAgentResult = null;
+  let taskStatus = 'completed';
+  let taskError = null;
 
   // Create a master task record
   task = await createTask({
@@ -139,43 +145,51 @@ async function processCommand(command, userId = null, context = {}) {
     userId
   });
 
-  // Route to appropriate sub-agent logic
-  switch (intent) {
-    case 'CREATE_CAMPAIGN': {
-      const plan = await generateStrategicPlan({ goal: 'campaign creation', command, ...context });
-      reply = `Campaign strategy ready. ${plan.summary}`;
-      subAgentResult = plan;
-      break;
+  try {
+    // Route to appropriate sub-agent logic
+    switch (intent) {
+      case 'CREATE_CAMPAIGN': {
+        const plan = await generateStrategicPlan({ goal: 'campaign creation', command, ...context });
+        reply = `Campaign strategy ready. ${plan.summary}`;
+        subAgentResult = plan;
+        break;
+      }
+      case 'OPTIMIZE_CAMPAIGN': {
+        const { optimizeCampaigns } = require('./optimizationService');
+        const suggestions = await optimizeCampaigns();
+        reply = `Optimization complete. Generated ${suggestions.length} suggestion(s).`;
+        subAgentResult = { suggestions };
+        break;
+      }
+      case 'FINANCE_REPORT': {
+        const { getPlatformFinanceSummary } = require('./financeService');
+        const summary = await getPlatformFinanceSummary();
+        reply = `Finance summary: Revenue $${summary.total_revenue || 0}, Spend $${summary.total_spend || 0}, ROAS ${summary.avg_roas || 0}x`;
+        subAgentResult = summary;
+        break;
+      }
+      case 'SYSTEM_STATUS': {
+        const { data: tasks } = await supabaseAdmin
+          .from('agent_tasks').select('status').gte('created_at', new Date(Date.now() - 86400000).toISOString());
+        const statusCount = (tasks || []).reduce((acc, t) => { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
+        reply = `System active. Tasks last 24h: ${JSON.stringify(statusCount)}`;
+        subAgentResult = statusCount;
+        break;
+      }
+      case 'GENERAL':
+      default: {
+        const system = 'You are DAB AI, a marketing automation assistant. Answer concisely.';
+        const aiReply = await callAI(system, command);
+        reply = aiReply || 'I can help with campaigns, leads, follow-ups, and financial reports. What would you like to do?';
+        break;
+      }
     }
-    case 'OPTIMIZE_CAMPAIGN': {
-      const { optimizeCampaigns } = require('./optimizationService');
-      const suggestions = await optimizeCampaigns();
-      reply = `Optimization complete. Generated ${suggestions.length} suggestion(s).`;
-      subAgentResult = { suggestions };
-      break;
-    }
-    case 'FINANCE_REPORT': {
-      const { getPlatformFinanceSummary } = require('./financeService');
-      const summary = await getPlatformFinanceSummary();
-      reply = `Finance summary: Revenue $${summary.total_revenue || 0}, Spend $${summary.total_spend || 0}, ROAS ${summary.avg_roas || 0}x`;
-      subAgentResult = summary;
-      break;
-    }
-    case 'SYSTEM_STATUS': {
-      const { data: tasks } = await supabaseAdmin
-        .from('agent_tasks').select('status').gte('created_at', new Date(Date.now() - 86400000).toISOString());
-      const statusCount = (tasks || []).reduce((acc, t) => { acc[t.status] = (acc[t.status] || 0) + 1; return acc; }, {});
-      reply = `System active. Tasks last 24h: ${JSON.stringify(statusCount)}`;
-      subAgentResult = statusCount;
-      break;
-    }
-    case 'GENERAL':
-    default: {
-      const system = 'You are DAB AI, a marketing automation assistant. Answer concisely.';
-      const aiReply = await callAI(system, command);
-      reply = aiReply || 'I can help with campaigns, leads, follow-ups, and financial reports. What would you like to do?';
-      break;
-    }
+  } catch (err) {
+    taskStatus = 'failed';
+    taskError = err.message;
+    reply = 'I could not complete that command right now. Please retry after checking service configuration.';
+    subAgentResult = { error: err.message };
+    logger.error('ORCHESTRATOR', 'Command execution failed', { intent, error: err.message, taskId: task.id });
   }
 
   // Log the decision
@@ -185,18 +199,31 @@ async function processCommand(command, userId = null, context = {}) {
     decisionType: intent,
     reasoning: `Command: "${command}" → classified as ${intent}`,
     action: reply,
-    confidence: 0.85,
+    confidence: taskStatus === 'completed' ? 0.85 : 0.25,
     metadata: { subAgentResult }
   });
 
   // Mark task complete
   await supabaseAdmin.from('agent_tasks')
-    .update({ status: 'completed', completed_at: new Date().toISOString(), result: { reply } })
+    .update({
+      status: taskStatus,
+      completed_at: new Date().toISOString(),
+      result: { reply, subAgentResult },
+      error_msg: taskError
+    })
     .eq('id', task.id);
 
   logger.agentDecision('orchestrator', reply, { intent, taskId: task.id });
 
-  return { intent, reply, taskId: task.id, decisionId: decision.id, result: subAgentResult };
+  return {
+    intent,
+    reply,
+    taskId: task.id,
+    decisionId: decision.id,
+    result: subAgentResult,
+    status: taskStatus,
+    error: taskError,
+  };
 }
 
 // ─── Get recent agent activity ────────────────────────────────────────────

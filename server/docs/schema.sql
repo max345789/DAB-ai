@@ -298,3 +298,137 @@ SELECT
   (SELECT COALESCE(SUM(revenue), 0) FROM finance
      WHERE date >= CURRENT_DATE - INTERVAL '30 days')                          AS monthly_revenue,
   (SELECT COALESCE(AVG(score), 0) FROM leads WHERE score IS NOT NULL)          AS avg_lead_score;
+
+-- ── COMPATIBILITY PATCHES (Stage 2 → Stage 6 runtime alignment) ────────────
+-- Safe to run repeatedly.
+
+-- campaigns fields used by API/controllers
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS budget        NUMERIC(12,2) DEFAULT 0;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS start_date    DATE;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS end_date      DATE;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS userid        INTEGER;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS updatedat     TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS impressions   INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS clicks        INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS campaigns ADD COLUMN IF NOT EXISTS last_stats_at TIMESTAMPTZ;
+
+-- leads fields used by scoring/scheduler/controllers
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS channel        TEXT;
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS budget         NUMERIC(12,2);
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS archived       BOOLEAN DEFAULT FALSE;
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS userid         INTEGER;
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS updatedat      TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS leadscore      INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS followupcount  INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS leads ADD COLUMN IF NOT EXISTS lastfollowupat TIMESTAMPTZ;
+
+-- ads fields used by campaign generator
+ALTER TABLE IF EXISTS ads ADD COLUMN IF NOT EXISTS audience          TEXT;
+ALTER TABLE IF EXISTS ads ADD COLUMN IF NOT EXISTS variant_index     INTEGER;
+ALTER TABLE IF EXISTS ads ADD COLUMN IF NOT EXISTS performance_score NUMERIC(6,2) DEFAULT 0;
+
+-- campaign_stats compatibility (new API uses leads_generated)
+ALTER TABLE IF EXISTS campaign_stats ADD COLUMN IF NOT EXISTS leads_generated INTEGER DEFAULT 0;
+UPDATE campaign_stats SET leads_generated = COALESCE(leads_generated, leads, 0);
+
+-- conversations compatibility (chat history uses session_id/timestamp)
+ALTER TABLE IF EXISTS conversations ADD COLUMN IF NOT EXISTS session_id INTEGER;
+ALTER TABLE IF EXISTS conversations ADD COLUMN IF NOT EXISTS timestamp  TIMESTAMPTZ DEFAULT NOW();
+
+-- followups compatibility (scheduler uses scheduled_time/attempt_count/sent_time)
+ALTER TABLE IF EXISTS followups ADD COLUMN IF NOT EXISTS scheduled_time TIMESTAMPTZ;
+ALTER TABLE IF EXISTS followups ADD COLUMN IF NOT EXISTS sent_time      TIMESTAMPTZ;
+ALTER TABLE IF EXISTS followups ADD COLUMN IF NOT EXISTS attempt_count  INTEGER DEFAULT 0;
+ALTER TABLE IF EXISTS followups ADD COLUMN IF NOT EXISTS generated_by   TEXT DEFAULT 'ai';
+ALTER TABLE IF EXISTS followups ADD COLUMN IF NOT EXISTS error_msg      TEXT;
+UPDATE followups SET scheduled_time = COALESCE(scheduled_time, scheduled_at) WHERE scheduled_time IS NULL;
+UPDATE followups SET sent_time      = COALESCE(sent_time, sent_at)      WHERE sent_time IS NULL;
+UPDATE followups SET attempt_count  = COALESCE(attempt_count, attempts, 0) WHERE attempt_count IS NULL;
+
+-- lead conversation timeline table used by leadController
+CREATE TABLE IF NOT EXISTS conversation_history (
+  id         SERIAL PRIMARY KEY,
+  lead_id    INTEGER REFERENCES leads(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL DEFAULT 'user',
+  message    TEXT NOT NULL,
+  intent     TEXT,
+  timestamp  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_history_lead_id    ON conversation_history(lead_id);
+CREATE INDEX IF NOT EXISTS idx_conversation_history_timestamp   ON conversation_history(timestamp DESC);
+
+-- finance stage tables required by finance/optimization services
+CREATE TABLE IF NOT EXISTS ad_expenses (
+  id           SERIAL PRIMARY KEY,
+  campaign_id  INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+  amount       NUMERIC(12,2) NOT NULL DEFAULT 0,
+  date         DATE NOT NULL DEFAULT CURRENT_DATE,
+  platform     TEXT,
+  description  TEXT,
+  expense_type TEXT DEFAULT 'ad',
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ad_expenses_campaign_id ON ad_expenses(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_ad_expenses_date        ON ad_expenses(date DESC);
+
+CREATE TABLE IF NOT EXISTS revenue (
+  id          SERIAL PRIMARY KEY,
+  lead_id     INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+  campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL,
+  amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  source      TEXT,
+  notes       TEXT,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_revenue_campaign_id ON revenue(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_lead_id     ON revenue(lead_id);
+CREATE INDEX IF NOT EXISTS idx_revenue_date        ON revenue(date DESC);
+
+CREATE TABLE IF NOT EXISTS campaign_finance (
+  id              SERIAL PRIMARY KEY,
+  campaign_id     INTEGER UNIQUE REFERENCES campaigns(id) ON DELETE CASCADE,
+  total_spend     NUMERIC(12,2) DEFAULT 0,
+  total_revenue   NUMERIC(12,2) DEFAULT 0,
+  total_leads     INTEGER DEFAULT 0,
+  closed_deals    INTEGER DEFAULT 0,
+  cost_per_lead   NUMERIC(10,2) DEFAULT 0,
+  conversion_rate NUMERIC(8,4) DEFAULT 0,
+  roas            NUMERIC(10,4) DEFAULT 0,
+  roi             NUMERIC(10,4) DEFAULT 0,
+  profit          NUMERIC(12,2) DEFAULT 0,
+  last_updated    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_campaign_finance_campaign_id ON campaign_finance(campaign_id);
+
+CREATE TABLE IF NOT EXISTS optimization_rules (
+  id           SERIAL PRIMARY KEY,
+  rule_name    TEXT NOT NULL,
+  metric       TEXT NOT NULL,
+  operator     TEXT NOT NULL DEFAULT 'gt',
+  threshold    NUMERIC NOT NULL DEFAULT 0,
+  action       TEXT NOT NULL,
+  action_value NUMERIC,
+  priority     INTEGER DEFAULT 2,
+  status       TEXT NOT NULL DEFAULT 'active',
+  createdat    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_optimization_rules_status ON optimization_rules(status);
+
+CREATE TABLE IF NOT EXISTS optimization_suggestions (
+  id           SERIAL PRIMARY KEY,
+  campaign_id  INTEGER REFERENCES campaigns(id) ON DELETE CASCADE,
+  rule_id      INTEGER REFERENCES optimization_rules(id) ON DELETE SET NULL,
+  suggestion   TEXT NOT NULL,
+  action       TEXT NOT NULL,
+  action_value NUMERIC,
+  priority     TEXT DEFAULT 'medium',
+  status       TEXT DEFAULT 'pending',
+  metric_value NUMERIC,
+  metric_name  TEXT,
+  ai_insight   TEXT,
+  applied_at   TIMESTAMPTZ,
+  createdat    TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_optimization_suggestions_campaign_id ON optimization_suggestions(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_optimization_suggestions_status      ON optimization_suggestions(status);

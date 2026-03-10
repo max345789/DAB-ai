@@ -5,43 +5,40 @@
 // ─────────────────────────────────────────────────────────────
 const { supabaseAdmin } = require('./supabaseClient');
 
-// Reuse the provider-agnostic callAI from aiService
-let _callAI = null;
-function getCallAI() {
-  if (!_callAI) _callAI = require('./aiService')._callAI || _fallbackCallAI;
-  return _callAI;
-}
-
 // ── Internal AI caller (duplicated for independence) ──────────
 async function _aiCall(systemPrompt, userPrompt) {
   const PROVIDER = process.env.AI_PROVIDER ||
     (process.env.ANTHROPIC_API_KEY ? 'anthropic' :
      process.env.OPENAI_API_KEY    ? 'openai'    : 'fallback');
 
-  if (PROVIDER === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client    = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg       = await client.messages.create({
-      model: process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      system  : systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
-    return msg.content[0].text.trim();
-  }
+  try {
+    if (PROVIDER === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
+      const Anthropic = require('@anthropic-ai/sdk');
+      const client    = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const msg       = await client.messages.create({
+        model: process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        system  : systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+      return msg.content?.[0]?.text?.trim() || null;
+    }
 
-  if (PROVIDER === 'openai' && process.env.OPENAI_API_KEY) {
-    const OpenAI    = require('openai');
-    const client    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const completion= await client.chat.completions.create({
-      model  : process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userPrompt   },
-      ],
-      max_tokens: 1500,
-    });
-    return completion.choices[0].message.content.trim();
+    if (PROVIDER === 'openai' && process.env.OPENAI_API_KEY) {
+      const OpenAI    = require('openai');
+      const client    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion= await client.chat.completions.create({
+        model  : process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt   },
+        ],
+        max_tokens: 1500,
+      });
+      return completion.choices?.[0]?.message?.content?.trim() || null;
+    }
+  } catch (err) {
+    console.warn('[CampaignGenerator] provider call failed:', err.message);
   }
 
   return null;
@@ -133,11 +130,16 @@ Platform: ${platform}
 Campaign Goal: ${goal}`;
 
   let generated = null;
+  let aiGenerated = false;
+  const aiProvider = process.env.AI_PROVIDER ||
+    (process.env.ANTHROPIC_API_KEY ? 'anthropic' :
+     process.env.OPENAI_API_KEY    ? 'openai'    : 'fallback');
 
   try {
     const raw = await _aiCall(systemPrompt, userPrompt);
     if (raw) {
       generated = JSON.parse(raw.replace(/```json|```/g, '').trim());
+      aiGenerated = true;
     }
   } catch (err) {
     console.warn('[CampaignGenerator] AI failed, using rule-based fallback:', err.message);
@@ -195,7 +197,8 @@ Campaign Goal: ${goal}`;
     targeting: generated.targeting,
     summary  : generated.summary || `AI-generated ${platform} campaign targeting ${target_audience}.`,
     platform,
-    ai_generated: !!generated,
+    ai_generated: aiGenerated,
+    ai_provider: aiGenerated ? aiProvider : 'fallback',
   };
 }
 

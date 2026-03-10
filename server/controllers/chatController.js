@@ -3,7 +3,9 @@
 //  POST /api/chat
 // ─────────────────────────────────────────────────────────────
 const { supabaseAdmin }  = require('../services/supabaseClient');
-const { processMessage } = require('../services/aiAgent');
+const { processMessage, detectIntent } = require('../services/aiAgent');
+const { generateChatReply } = require('../services/aiService');
+const { logActivity } = require('../services/activityService');
 
 /**
  * POST /api/chat
@@ -17,8 +19,21 @@ async function chat(req, res, next) {
       return res.status(400).json({ error: 'message is required' });
     }
 
-    // 1️⃣  Process message through AI agent
-    const agentResponse = processMessage(message.trim());
+    const cleanMessage = message.trim();
+
+    // 1️⃣  Generate model reply first, with deterministic fallback
+    const fallbackResponse = processMessage(cleanMessage);
+    const aiResponse = await generateChatReply(cleanMessage);
+    const intent = detectIntent(cleanMessage);
+
+    const agentResponse = {
+      ...fallbackResponse,
+      intent,
+      reply: aiResponse.reply || fallbackResponse.reply,
+      source: aiResponse.source,
+      used_fallback: !!aiResponse.used_fallback,
+      timestamp: new Date().toISOString(),
+    };
 
     // 2️⃣  Persist user message
     const { error: userInsertErr } = await supabaseAdmin
@@ -26,7 +41,7 @@ async function chat(req, res, next) {
       .insert({
         user_id,
         session_id,
-        message : message.trim(),
+        message : cleanMessage,
         role    : 'user',
         intent  : agentResponse.intent,
       });
@@ -46,12 +61,27 @@ async function chat(req, res, next) {
 
     if (asstInsertErr) console.error('[chat] assistant insert error:', asstInsertErr);
 
-    // 4️⃣  Return response
+    // 4️⃣  Best-effort activity log
+    await logActivity({
+      action     : 'chat_message_processed',
+      description: `Chat processed with intent ${agentResponse.intent}`,
+      category   : 'chat',
+      targetType : 'conversation',
+      metadata   : {
+        source       : agentResponse.source,
+        used_fallback: agentResponse.used_fallback,
+      },
+      userId     : user_id,
+    });
+
+    // 5️⃣  Return response
     return res.status(200).json({
       success : true,
       intent  : agentResponse.intent,
       action  : agentResponse.action,
       reply   : agentResponse.reply,
+      source  : agentResponse.source,
+      used_fallback: agentResponse.used_fallback,
       timestamp: agentResponse.timestamp,
     });
   } catch (err) {

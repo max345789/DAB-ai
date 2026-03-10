@@ -6,6 +6,7 @@ const { supabaseAdmin }             = require('../services/supabaseClient');
 const { scoreLead }                 = require('../services/aiService');
 const { scheduleFollowUp }          = require('../services/schedulerService');
 const { generateFollowUp }          = require('../services/aiService');
+const { logActivity }               = require('../services/activityService');
 
 // ── Helpers ───────────────────────────────────────────────────
 function toTierLabel(tier) {
@@ -104,6 +105,21 @@ async function createLead(req, res, next) {
       }
     }
 
+    await logActivity({
+      action     : 'lead_created',
+      description: `Lead created: ${lead.name}`,
+      category   : 'lead',
+      targetId   : lead.id,
+      targetType : 'lead',
+      metadata   : {
+        source: lead.source || source,
+        score: scoring?.score ?? null,
+        score_tier: scoring?.tier ?? null,
+        followup_scheduled: !!followup,
+      },
+      userId     : userid,
+    });
+
     return res.status(201).json({
       success : true,
       lead,
@@ -193,6 +209,16 @@ async function updateLead(req, res, next) {
     if (error) throw error;
     if (!data)  return res.status(404).json({ error: 'Lead not found' });
 
+    await logActivity({
+      action     : 'lead_updated',
+      description: `Lead updated: ${data.name}`,
+      category   : 'lead',
+      targetId   : data.id,
+      targetType : 'lead',
+      metadata   : { updated_fields: Object.keys(req.body || {}) },
+      userId     : data.userid || null,
+    });
+
     return res.status(200).json({ success: true, lead: data });
   } catch (err) {
     next(err);
@@ -221,6 +247,16 @@ async function rescoreLead(req, res, next) {
         updatedat   : new Date().toISOString(),
       })
       .eq('id', id);
+
+    await logActivity({
+      action     : 'lead_rescored',
+      description: `Lead re-scored: ${lead.name}`,
+      category   : 'lead',
+      targetId   : Number(id),
+      targetType : 'lead',
+      metadata   : { score: scoring.score, score_tier: scoring.tier, reason: scoring.reason },
+      userId     : lead.userid || null,
+    });
 
     return res.status(200).json({
       success: true,

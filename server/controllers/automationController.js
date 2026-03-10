@@ -4,6 +4,7 @@
 const engine  = require('../services/automationEngine');
 const history = require('../services/automationHistoryService');
 const logger  = require('../services/loggerService');
+const { logActivity } = require('../services/activityService');
 
 // GET /api/automation/rules
 async function getRules(req, res, next) {
@@ -21,6 +22,15 @@ async function createRule(req, res, next) {
       return res.status(400).json({ error: 'name, trigger_type, and actions are required' });
     const rule = await engine.createRule({ name, trigger_type, conditions: conditions || [], actions, is_active, description });
     logger.info('AUTOMATION', `Rule created: ${name}`, { ruleId: rule.id });
+    await logActivity({
+      action: 'automation_rule_created',
+      description: `Automation rule created: ${name}`,
+      category: 'automation',
+      targetId: rule.id,
+      targetType: 'automation_rule',
+      metadata: { trigger_type, is_active },
+      userId: req.user?.userId || null,
+    });
     res.status(201).json(rule);
   } catch (err) { next(err); }
 }
@@ -48,6 +58,15 @@ async function triggerRule(req, res, next) {
     const { trigger_type, target_id, context = {} } = req.body;
     if (!trigger_type) return res.status(400).json({ error: 'trigger_type is required' });
     const results = await engine.fireTrigger(trigger_type, target_id || null, context);
+    await logActivity({
+      action: 'automation_trigger_fired',
+      description: `Automation trigger fired: ${trigger_type}`,
+      category: 'automation',
+      targetId: target_id || null,
+      targetType: context?.targetType || 'system',
+      metadata: { triggered_rules: results.length },
+      userId: req.user?.userId || null,
+    });
     res.json({ triggered: results.length, results });
   } catch (err) { next(err); }
 }

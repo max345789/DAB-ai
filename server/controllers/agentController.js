@@ -2,9 +2,8 @@
 // Agent orchestrator endpoints
 
 const orchestrator   = require('../services/orchestratorService');
-const logger         = require('../services/loggerService');
 const { supabaseAdmin } = require('../services/supabaseClient');
-const { getRecentActivity } = require('../services/activityService');
+const { getRecentActivity, logActivity } = require('../services/activityService');
 
 // POST /api/agent/command
 async function command(req, res, next) {
@@ -13,6 +12,19 @@ async function command(req, res, next) {
     if (!cmd) return res.status(400).json({ error: 'command is required' });
     const userId = req.user?.userId || null;
     const result = await orchestrator.processCommand(cmd, userId, context);
+    await logActivity({
+      action: result.status === 'failed' ? 'agent_command_failed' : 'agent_command_executed',
+      description: `Agent command ${result.status === 'failed' ? 'failed' : 'executed'}: ${cmd}`,
+      category: 'agent',
+      targetId: result.taskId || null,
+      targetType: 'agent_task',
+      metadata: {
+        intent: result.intent,
+        status: result.status,
+        error: result.error || null,
+      },
+      userId,
+    });
     res.json({ success: true, ...result });
   } catch (err) { next(err); }
 }
@@ -56,6 +68,15 @@ async function createTask(req, res, next) {
       agentType, taskType, priority: priority || 'medium',
       payload: payload || {}, scheduledFor: scheduledFor || null,
       userId: req.user?.userId
+    });
+    await logActivity({
+      action: 'agent_task_created',
+      description: `Agent task created: ${taskType}`,
+      category: 'agent',
+      targetId: task.id,
+      targetType: 'agent_task',
+      metadata: { agentType, priority: priority || 'medium' },
+      userId: req.user?.userId || null,
     });
     res.status(201).json(task);
   } catch (err) { next(err); }

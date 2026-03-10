@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────
 const { supabaseAdmin }        = require('../services/supabaseClient');
 const { generateAdCampaign }   = require('../services/campaignGeneratorService');
+const { logActivity }          = require('../services/activityService');
 const {
   calculateCampaignStats,
   upsertDailyStats,
@@ -41,6 +42,15 @@ async function createCampaign(req, res, next) {
       .select().single();
 
     if (error) throw error;
+    await logActivity({
+      action: 'campaign_created',
+      description: `Campaign created: ${data.name}`,
+      category: 'campaign',
+      targetId: data.id,
+      targetType: 'campaign',
+      metadata: { platform: data.platform, budget: data.daily_budget || data.budget || 0 },
+      userId: userid,
+    });
     return res.status(201).json({ success: true, campaign: data });
   } catch (err) { next(err); }
 }
@@ -86,12 +96,30 @@ async function generateCampaign(req, res, next) {
       campaign?.id || null
     );
 
+    await logActivity({
+      action: 'campaign_generated',
+      description: `Campaign ads generated for ${name || service}`,
+      category: 'campaign',
+      targetId: campaign?.id || null,
+      targetType: 'campaign',
+      metadata: {
+        service,
+        platform,
+        goal,
+        ai_generated: result.ai_generated,
+        ai_provider: result.ai_provider,
+      },
+      userId: userid,
+    });
+
     return res.status(201).json({
       success : true,
       campaign,
       ads     : result.ads,
       targeting: result.targeting,
       summary : result.summary,
+      ai_generated: result.ai_generated,
+      ai_provider: result.ai_provider,
       message : `Generated ${result.ads.length} ad variant(s) for "${name || service}".`,
     });
   } catch (err) { next(err); }
@@ -193,6 +221,16 @@ async function updateCampaign(req, res, next) {
     if (error) throw error;
     if (!data) return res.status(404).json({ error: 'Campaign not found' });
 
+    await logActivity({
+      action: 'campaign_updated',
+      description: `Campaign updated: ${data.name}`,
+      category: 'campaign',
+      targetId: data.id,
+      targetType: 'campaign',
+      metadata: { updated_fields: Object.keys(req.body || {}) },
+      userId: updates.userid || null,
+    });
+
     return res.status(200).json({ success: true, campaign: data });
   } catch (err) { next(err); }
 }
@@ -206,6 +244,21 @@ async function ingestStats(req, res, next) {
     const { id } = req.params;
     const stats  = await upsertDailyStats(Number(id), req.body);
     const totals = await calculateCampaignStats(Number(id));
+
+    await logActivity({
+      action: 'campaign_stats_ingested',
+      description: `Stats ingested for campaign #${id}`,
+      category: 'campaign',
+      targetId: Number(id),
+      targetType: 'campaign',
+      metadata: {
+        spend: totals.spend,
+        leads_generated: totals.leads_generated,
+        cpl: totals.cpl,
+        ctr: totals.ctr,
+      },
+      userId: req.body?.userid || null,
+    });
 
     return res.status(200).json({
       success        : true,
