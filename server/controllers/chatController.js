@@ -7,6 +7,8 @@ const { processMessage, detectIntent } = require('../services/aiAgent');
 const { generateChatReply } = require('../services/aiService');
 const { logActivity } = require('../services/activityService');
 
+const DISABLE_CHAT_FALLBACK = (process.env.DISABLE_CHAT_FALLBACK || '').toLowerCase() === 'true';
+
 /**
  * POST /api/chat
  * Body: { message, user_id?, session_id? }
@@ -73,6 +75,15 @@ async function chat(req, res, next) {
       },
       userId     : user_id,
     });
+
+    // Optional strict mode: surface provider failure instead of fallback
+    if (DISABLE_CHAT_FALLBACK && agentResponse.used_fallback) {
+      return res.status(503).json({
+        error: 'AI provider unavailable',
+        detail: 'Chat fallback disabled; check AI provider credentials/connectivity.',
+        source: agentResponse.source,
+      });
+    }
 
     // 5️⃣  Return response
     return res.status(200).json({
