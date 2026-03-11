@@ -7,7 +7,9 @@
 //  Stage 5: AI Orchestrator + Automation Engine + Integrations
 //  Stage 6: Reports + Integration Connect/Disconnect
 // ─────────────────────────────────────────────────────────────
-require('dotenv').config();
+// Always load backend env from server/.env even when started from repo root (PM2, Render, etc).
+const path = require('path');
+require('dotenv').config({ path: process.env.ENV_FILE || path.resolve(__dirname, '.env') });
 
 const express = require('express');
 const cors    = require('cors');
