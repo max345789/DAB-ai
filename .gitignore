@@ -3,6 +3,11 @@
 # dependencies
 /node_modules
 /server/node_modules
+/ai-gateway/node_modules
+/ai-worker/node_modules
+/ai-queue/node_modules
+/ai-shared/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
