@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { type CampaignStatus } from "@/lib/api";
+import { ApiErrorState } from "@/components/ApiErrorState";
 import { Button } from "@/components/ui/button";
 import { useCampaigns } from "@/hooks/useCampaigns";
 
@@ -14,7 +15,7 @@ const statusStyles: Record<CampaignStatus, string> = {
 };
 
 export function CampaignTable() {
-  const { campaigns, setCampaigns, isLoading } = useCampaigns();
+  const { campaigns, setCampaigns, isLoading, error, retry } = useCampaigns();
   const [query, setQuery] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -47,6 +48,15 @@ export function CampaignTable() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/40 backdrop-blur dark:border-white/10 dark:bg-white/5">
+        {error ? (
+          <div className="p-4">
+            <ApiErrorState
+              title="Campaign data unavailable"
+              message={error}
+              onRetry={retry}
+            />
+          </div>
+        ) : null}
         <table className="hidden w-full text-left text-sm md:table">
           <thead className="bg-white/60 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-950/70">
             <tr>
@@ -65,6 +75,13 @@ export function CampaignTable() {
               <tr className="border-t border-white/10 bg-white/30 dark:border-slate-900/60 dark:bg-slate-950/40">
                 <td className="px-4 py-6 text-sm text-slate-400" colSpan={8}>
                   Loading campaigns...
+                </td>
+              </tr>
+            ) : null}
+            {!isLoading && !error && filtered.length === 0 ? (
+              <tr className="border-t border-white/10 bg-white/30 dark:border-slate-900/60 dark:bg-slate-950/40">
+                <td className="px-4 py-6 text-sm text-slate-400" colSpan={8}>
+                  No campaigns found.
                 </td>
               </tr>
             ) : null}
@@ -160,6 +177,11 @@ export function CampaignTable() {
         </table>
 
         <div className="grid gap-3 p-4 md:hidden">
+          {!isLoading && !error && filtered.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/60 p-4 text-sm text-slate-500 shadow-sm dark:bg-white/5">
+              No campaigns found.
+            </div>
+          ) : null}
           {filtered.map((campaign) => (
             <div
               key={campaign.id}

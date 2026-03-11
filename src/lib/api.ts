@@ -101,11 +101,12 @@ export type OptimizationSuggestion = {
 /**
  * API_BASE resolves to:
  *   – Production: the value of NEXT_PUBLIC_API_BASE (e.g. https://api.yourdomain.com/api)
- *   – Local dev:  empty string → fetch("/api/...") is rewritten by next.config.ts → localhost:5000
+ *   – Local dev:  empty string → fetch("/api/...") is rewritten by next.config.ts → localhost:5001
  *
  * All fetch paths below are relative to this base.
  */
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const ENABLE_MOCKS = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
 
 const mockDashboard: DashboardMetrics = {
   totalLeads: 1248,
@@ -360,6 +361,14 @@ function toErrorMessage(error: unknown) {
   return "Unknown error";
 }
 
+function apiError(endpoint: string, status?: number) {
+  return new Error(
+    status
+      ? `Request to ${endpoint} failed with status ${status}`
+      : `Request to ${endpoint} failed`
+  );
+}
+
 function normalizeLead(raw: Record<string, unknown>): Lead {
   const score = Number(raw.score ?? 0);
   const tier = String(raw.score_tier ?? "").toLowerCase();
@@ -435,7 +444,8 @@ export async function getDashboard(): Promise<DashboardMetrics> {
       cache: "no-store",
     });
     if (!response.ok) {
-      return mockDashboard;
+      if (ENABLE_MOCKS) return mockDashboard;
+      throw apiError("/dashboard/summary", response.status);
     }
     const data = (await response.json()) as
       | DashboardMetrics
@@ -460,10 +470,15 @@ export async function getDashboard(): Promise<DashboardMetrics> {
       };
     }
 
-    return (data as DashboardMetrics) ?? mockDashboard;
+    if (ENABLE_MOCKS) {
+      return (data as DashboardMetrics) ?? mockDashboard;
+    }
+
+    return data as DashboardMetrics;
   } catch (error) {
     console.warn("Dashboard fetch failed:", toErrorMessage(error));
-    return mockDashboard;
+    if (ENABLE_MOCKS) return mockDashboard;
+    throw error;
   }
 }
 
@@ -471,7 +486,8 @@ export async function getLeads(): Promise<Lead[]> {
   try {
     const response = await fetch(`${API_BASE}/leads`, { cache: "no-store" });
     if (!response.ok) {
-      return mockLeads;
+      if (ENABLE_MOCKS) return mockLeads;
+      throw apiError("/leads", response.status);
     }
     const data = (await response.json()) as
       | Lead[]
@@ -488,10 +504,12 @@ export async function getLeads(): Promise<Lead[]> {
       return rawLeads.map(normalizeLead);
     }
 
-    return mockLeads;
+    if (ENABLE_MOCKS) return mockLeads;
+    throw apiError("/leads");
   } catch (error) {
     console.warn("Leads fetch failed:", toErrorMessage(error));
-    return mockLeads;
+    if (ENABLE_MOCKS) return mockLeads;
+    throw error;
   }
 }
 
@@ -503,13 +521,13 @@ export async function postChat(message: string): Promise<{ reply: string }> {
       body: JSON.stringify({ message }),
     });
     if (!response.ok) {
-      return { reply: "I have queued that request. Want me to suggest copy?" };
+      throw apiError("/chat", response.status);
     }
     const data = (await response.json()) as { reply?: string };
     return { reply: data.reply ?? "Request received." };
   } catch (error) {
     console.warn("Chat fetch failed:", toErrorMessage(error));
-    return { reply: "Mock reply: I'll take care of that next." };
+    throw error;
   }
 }
 
@@ -517,7 +535,8 @@ export async function getCampaigns(): Promise<Campaign[]> {
   try {
     const response = await fetch(`${API_BASE}/campaigns`, { cache: "no-store" });
     if (!response.ok) {
-      return mockCampaigns;
+      if (ENABLE_MOCKS) return mockCampaigns;
+      throw apiError("/campaigns", response.status);
     }
     const data = (await response.json()) as
       | Campaign[]
@@ -534,10 +553,12 @@ export async function getCampaigns(): Promise<Campaign[]> {
       return rawCampaigns.map(normalizeCampaign);
     }
 
-    return mockCampaigns;
+    if (ENABLE_MOCKS) return mockCampaigns;
+    throw apiError("/campaigns");
   } catch (error) {
     console.warn("Campaigns fetch failed:", toErrorMessage(error));
-    return mockCampaigns;
+    if (ENABLE_MOCKS) return mockCampaigns;
+    throw error;
   }
 }
 
@@ -547,13 +568,19 @@ export async function getCampaign(id: string): Promise<Campaign | null> {
       cache: "no-store",
     });
     if (!response.ok) {
-      return mockCampaigns.find((campaign) => campaign.id === id) ?? null;
+      if (ENABLE_MOCKS) {
+        return mockCampaigns.find((campaign) => campaign.id === id) ?? null;
+      }
+      throw apiError(`/campaign/${id}`, response.status);
     }
     const data = (await response.json()) as Campaign;
     return data ?? null;
   } catch (error) {
     console.warn("Campaign fetch failed:", toErrorMessage(error));
-    return mockCampaigns.find((campaign) => campaign.id === id) ?? null;
+    if (ENABLE_MOCKS) {
+      return mockCampaigns.find((campaign) => campaign.id === id) ?? null;
+    }
+    throw error;
   }
 }
 
@@ -561,10 +588,36 @@ export async function postCampaign(payload: Partial<Campaign>): Promise<{
   success: boolean;
 }> {
   try {
+    const platformRaw = String(payload.platform ?? "meta").toLowerCase();
+    const platform =
+      platformRaw === "google"
+        ? "google"
+        : platformRaw === "linkedin"
+          ? "linkedin"
+          : "meta";
+
+    const dailyBudget = Number(
+      (payload.dailyBudget ?? (payload as Record<string, unknown>).daily_budget ?? payload.dailyBudget) || 0
+    );
+
+    const requestBody = {
+      name: payload.name,
+      platform,
+      daily_budget: Number.isFinite(dailyBudget) ? dailyBudget : 0,
+      budget: Number.isFinite(dailyBudget) ? dailyBudget : 0,
+      target_audience: payload.audience ? { description: payload.audience } : null,
+      location: payload.location ?? null,
+      goal:
+        payload.goal === "Traffic" || payload.goal === "Sales"
+          ? payload.goal
+          : "Lead Generation",
+      status: "draft",
+    };
+
     const response = await fetch(`${API_BASE}/campaign`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestBody),
     });
     if (!response.ok) {
       return { success: false };
@@ -628,7 +681,8 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       cache: "no-store",
     });
     if (!response.ok) {
-      return mockFinanceSummary;
+      if (ENABLE_MOCKS) return mockFinanceSummary;
+      throw apiError("/finance/summary", response.status);
     }
     const data = (await response.json()) as
       | FinanceSummary
@@ -660,10 +714,12 @@ export async function getFinanceSummary(): Promise<FinanceSummary> {
       return data as FinanceSummary;
     }
 
-    return mockFinanceSummary;
+    if (ENABLE_MOCKS) return mockFinanceSummary;
+    throw apiError("/finance/summary");
   } catch (error) {
     console.warn("Finance summary fetch failed:", toErrorMessage(error));
-    return mockFinanceSummary;
+    if (ENABLE_MOCKS) return mockFinanceSummary;
+    throw error;
   }
 }
 
@@ -675,13 +731,17 @@ export async function getCampaignFinance(
       cache: "no-store",
     });
     if (!response.ok) {
-      return { ...mockCampaignFinance, id };
+      if (ENABLE_MOCKS) return { ...mockCampaignFinance, id };
+      throw apiError(`/campaign/${id}/finance`, response.status);
     }
     const data = (await response.json()) as CampaignFinance;
-    return data ?? { ...mockCampaignFinance, id };
+    if (data) return data;
+    if (ENABLE_MOCKS) return { ...mockCampaignFinance, id };
+    throw apiError(`/campaign/${id}/finance`);
   } catch (error) {
     console.warn("Campaign finance fetch failed:", toErrorMessage(error));
-    return { ...mockCampaignFinance, id };
+    if (ENABLE_MOCKS) return { ...mockCampaignFinance, id };
+    throw error;
   }
 }
 
@@ -715,13 +775,17 @@ export async function getOptimizationSuggestions(): Promise<
       cache: "no-store",
     });
     if (!response.ok) {
-      return mockOptimizationSuggestions;
+      if (ENABLE_MOCKS) return mockOptimizationSuggestions;
+      throw apiError("/finance/optimizations", response.status);
     }
     const data = (await response.json()) as OptimizationSuggestion[];
-    return data ?? mockOptimizationSuggestions;
+    if (data) return data;
+    if (ENABLE_MOCKS) return mockOptimizationSuggestions;
+    throw apiError("/finance/optimizations");
   } catch (error) {
     console.warn("Optimization fetch failed:", toErrorMessage(error));
-    return mockOptimizationSuggestions;
+    if (ENABLE_MOCKS) return mockOptimizationSuggestions;
+    throw error;
   }
 }
 

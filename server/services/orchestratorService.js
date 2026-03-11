@@ -4,46 +4,7 @@
 
 const { supabaseAdmin } = require('./supabaseClient');
 const logger = require('./loggerService');
-
-// ─── AI provider (same pattern as aiService.js) ───────────────────────────
-let anthropic = null, openai = null;
-let PROVIDER = 'fallback';
-if (process.env.ANTHROPIC_API_KEY) {
-  const Anthropic = require('@anthropic-ai/sdk');
-  anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  PROVIDER = 'anthropic';
-} else if (process.env.OPENAI_API_KEY) {
-  const OpenAI = require('openai');
-  openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  PROVIDER = 'openai';
-}
-
-async function callAI(systemPrompt, userPrompt) {
-  try {
-    if (PROVIDER === 'anthropic') {
-      const msg = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }]
-      });
-      return msg.content?.[0]?.text || null;
-    }
-    if (PROVIDER === 'openai') {
-      const res = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ]
-      });
-      return res.choices?.[0]?.message?.content || null;
-    }
-  } catch (err) {
-    logger.warn('ORCHESTRATOR', 'Provider call failed, using fallback', { error: err.message, provider: PROVIDER });
-  }
-  return null; // fallback handled by caller
-}
+const { callAI, PROVIDER } = require('./aiService');
 
 // ─── Intent classification ────────────────────────────────────────────────
 const INTENTS = {
@@ -113,7 +74,10 @@ async function generateStrategicPlan(context) {
 Given a business context, produce a concise 3-step strategic marketing plan.
 Return JSON: { "plan": [{ "step": number, "action": string, "rationale": string, "priority": "high|medium|low" }], "summary": string }`;
 
-  const raw = await callAI(system, JSON.stringify(context));
+  const raw = await callAI(system, JSON.stringify(context), {
+    maxTokens: 1024,
+    metadata: { feature: 'orchestrator_plan' },
+  });
   if (raw) {
     try { return JSON.parse(raw.replace(/```json|```/g, '').trim()); } catch (_) {}
   }
@@ -179,7 +143,10 @@ async function processCommand(command, userId = null, context = {}) {
       case 'GENERAL':
       default: {
         const system = 'You are DAB AI, a marketing automation assistant. Answer concisely.';
-        const aiReply = await callAI(system, command);
+        const aiReply = await callAI(system, command, {
+          maxTokens: 512,
+          metadata: { feature: 'orchestrator_general' },
+        });
         reply = aiReply || 'I can help with campaigns, leads, follow-ups, and financial reports. What would you like to do?';
         break;
       }

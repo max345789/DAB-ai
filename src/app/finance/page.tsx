@@ -2,10 +2,26 @@ import { ExpenseCards } from "@/components/ExpenseCards";
 import { SpendChart } from "@/components/SpendChart";
 import { BudgetControlPanel } from "@/components/BudgetControlPanel";
 import { OptimizationPanel } from "@/components/OptimizationPanel";
+import { ApiErrorState } from "@/components/ApiErrorState";
 import { getFinanceSummary } from "@/lib/api";
 
 export default async function FinancePage() {
-  const summary = await getFinanceSummary();
+  let summary;
+
+  try {
+    summary = await getFinanceSummary();
+  } catch (error) {
+    return (
+      <ApiErrorState
+        title="Finance dashboard unavailable"
+        message={
+          error instanceof Error
+            ? error.message
+            : "Could not load finance data."
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-8">

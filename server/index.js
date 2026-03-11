@@ -30,6 +30,9 @@ const integrationRoutes = require('./routes/integrationRoutes');
 
 // ── Routes (Stage 6) ─────────────────────────────────────────
 const reportsRoutes     = require('./routes/reportsRoutes');
+const aiRoutes          = require('./routes/aiRoutes');
+const systemRoutes      = require('./routes/systemRoutes');
+const profileRoutes     = require('./routes/profileRoutes');
 
 // ── Services ──────────────────────────────────────────────────
 const { startTaskScheduler }  = require('./services/taskScheduler');
@@ -62,7 +65,11 @@ app.use(cors({
 }));
 
 // ── Global Middleware ─────────────────────────────────────────
-app.use(express.json());
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString();
+  },
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
@@ -144,6 +151,7 @@ app.get('/', (_req, res) => res.json({
                  'POST /api/finance/expense', 'POST /api/finance/revenue',
                  'GET /api/finance/optimizations', 'POST /api/finance/optimize',
                  'POST /api/finance/optimization/:id/apply', 'POST /api/finance/daily-update'],
+    system    : ['GET /system/health', 'GET /system/metrics'],
   },
   time: new Date().toISOString(),
 }));
@@ -167,6 +175,8 @@ app.get('/api/health', async (_req, res) => {
   });
 });
 
+app.use(systemRoutes);
+
 // ── API Routes (Public + Core) ────────────────────────────────
 // Note: auth-protected routers are mounted after public routes
 // so they don't block non-auth endpoints (frontend has no auth yet).
@@ -178,6 +188,8 @@ app.use('/api', campaignRoutes);
 app.use('/api', followupRoutes);
 app.use('/api', meetingRoutes);
 app.use('/api', financeRoutes);
+app.use('/api', aiRoutes);
+app.use('/api', profileRoutes);
 
 // ── API Routes (Auth-protected) ───────────────────────────────
 app.use('/api', agentRoutes);

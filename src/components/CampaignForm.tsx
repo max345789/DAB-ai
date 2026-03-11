@@ -15,6 +15,7 @@ export function CampaignForm() {
     goal: "Lead Generation",
   });
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   function updateField(name: keyof typeof form, value: string) {
@@ -25,11 +26,15 @@ export function CampaignForm() {
     event.preventDefault();
     setIsSubmitting(true);
     setStatus("idle");
+    setErrorMessage(null);
+
+    const budgetRaw = form.dailyBudget.trim();
+    const budgetParsed = Number(budgetRaw.replace(/[^0-9.]/g, ""));
 
     const result = await postCampaign({
       name: form.name,
       platform: form.platform as "Meta" | "Google" | "LinkedIn",
-      dailyBudget: Number(form.dailyBudget),
+      dailyBudget: Number.isFinite(budgetParsed) ? budgetParsed : 0,
       audience: form.audience,
       productService: form.product,
       location: form.location,
@@ -43,6 +48,9 @@ export function CampaignForm() {
 
     setIsSubmitting(false);
     setStatus(result.success ? "success" : "error");
+    if (!result.success) {
+      setErrorMessage("Campaign API rejected the request. Check required fields and backend status.");
+    }
   }
 
   return (
@@ -133,7 +141,7 @@ export function CampaignForm() {
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-500">
           {status === "success" && "Campaign created successfully."}
-          {status === "error" && "Unable to create campaign."}
+          {status === "error" && (errorMessage || "Unable to create campaign.")}
         </p>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Submitting..." : "Launch campaign"}

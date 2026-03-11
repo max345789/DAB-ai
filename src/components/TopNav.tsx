@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useAuth } from "@/components/AuthProvider";
 
 const navItems = [
   { label: "Dashboard", href: "/dashboard" },
@@ -19,6 +20,7 @@ const navItems = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const { user, isReady, logout } = useAuth();
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-white/70 backdrop-blur-xl dark:bg-[#0b0f14]/70">
@@ -95,7 +97,51 @@ export function TopNav() {
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
           </button>
-          <div className="h-10 w-10 rounded-full border border-white/10 bg-gradient-to-br from-slate-200 to-slate-400 dark:from-slate-700 dark:to-slate-500" />
+          {isReady && user ? (
+            <div className="group relative">
+              <Link
+                href="/profile"
+                className="block h-10 w-10 overflow-hidden rounded-full border border-white/10 bg-gradient-to-br from-slate-200 to-slate-400 dark:from-slate-700 dark:to-slate-500"
+                aria-label="Profile"
+              >
+                {/* Avatar image is rendered on profile page; keep nav lightweight */}
+              </Link>
+              <div className="invisible absolute right-0 top-12 z-50 w-44 rounded-2xl border border-white/10 bg-white/90 p-2 text-sm text-slate-700 shadow-lg backdrop-blur group-hover:visible dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
+                <div className="px-3 py-2">
+                  <p className="text-xs text-slate-500">Signed in</p>
+                  <p className="truncate text-sm font-semibold">{user.name || user.email}</p>
+                </div>
+                <Link
+                  href="/profile"
+                  className="block rounded-xl px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Profile
+                </Link>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="block w-full rounded-xl px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Log out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="hidden items-center gap-2 md:flex">
+              <Link
+                href="/login"
+                className="rounded-full border border-white/20 bg-white/60 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-white/80 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+              >
+                Sign up
+              </Link>
+            </div>
+          )}
           <ThemeToggle />
         </div>
       </div>

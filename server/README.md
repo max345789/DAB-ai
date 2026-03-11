@@ -93,14 +93,14 @@ npm run dev
 npm start
 ```
 
-Server runs at **http://localhost:5000**
+Server runs at **http://localhost:5001**
 
 ---
 
 ## Example: Chat with the AI Agent
 
 ```bash
-curl -X POST http://localhost:5000/api/chat \
+curl -X POST http://localhost:5001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "create ad on Meta", "user_id": 1}'
 ```
@@ -108,7 +108,7 @@ curl -X POST http://localhost:5000/api/chat \
 ## Example: Create a Lead
 
 ```bash
-curl -X POST http://localhost:5000/api/lead \
+curl -X POST http://localhost:5001/api/lead \
   -H "Content-Type: application/json" \
   -d '{"name": "John Smith", "email": "john@example.com", "channel": "meta"}'
 ```
@@ -116,7 +116,7 @@ curl -X POST http://localhost:5000/api/lead \
 ## Example: Dashboard Stats
 
 ```bash
-curl http://localhost:5000/api/dashboard
+curl http://localhost:5001/api/dashboard
 ```
 
 ---

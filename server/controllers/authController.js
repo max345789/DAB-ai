@@ -3,11 +3,15 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { createHash, randomBytes } = require('crypto');
 const { supabaseAdmin } = require('../services/supabaseClient');
 const logger = require('../services/loggerService');
+const { sendEmail } = require('../services/integrations/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dab-ai-secret-change-in-prod';
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '7d';
+const RESET_TOKEN_TTL_MINS = Number(process.env.PASSWORD_RESET_TTL_MINS || 30);
+const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
 
 function signToken(user) {
   return jwt.sign(
@@ -15,6 +19,10 @@ function signToken(user) {
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES }
   );
+}
+
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
 }
 
 // POST /api/auth/register
@@ -72,11 +80,125 @@ async function login(req, res, next) {
   }
 }
 
+// POST /api/auth/forgot
+// Generates a reset token (emailed if EMAIL_PROVIDER configured).
+// In non-production, returns dev_reset_token for fast testing.
+async function forgot(req, res, next) {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    const { data: user } = await supabaseAdmin
+      .from('users')
+      .select('id, email, name')
+      .eq('email', email)
+      .maybeSingle();
+
+    // Always return success to avoid account enumeration.
+    if (!user) return res.json({ success: true });
+
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = sha256(token);
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINS * 60_000).toISOString();
+    const now = new Date().toISOString();
+
+    await supabaseAdmin.from('password_resets').insert({
+      user_id: user.id,
+      token_hash: tokenHash,
+      created_at: now,
+      expires_at: expiresAt,
+      used_at: null,
+    });
+
+    const resetUrl = `${APP_PUBLIC_URL.replace(/\/$/, '')}/reset-password?token=${token}`;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Reset your DAB AI password',
+        text: `Reset link: ${resetUrl}`,
+        html: `<p>Click to reset your password:</p><p><a href="${resetUrl}">${resetUrl}</a></p>`,
+      });
+    } catch (err) {
+      logger.warn('AUTH', 'Password reset email failed', { error: err.message });
+    }
+
+    logger.authEvent(user.id, 'FORGOT_PASSWORD', req.ip);
+
+    // Dev helper
+    if (process.env.NODE_ENV !== 'production') {
+      return res.json({ success: true, dev_reset_token: token, reset_url: resetUrl });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/auth/reset
+// Body: { token, password }
+async function reset(req, res, next) {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) return res.status(400).json({ error: 'token and password are required' });
+
+    const tokenHash = sha256(token);
+    const { data: resetRow, error } = await supabaseAdmin
+      .from('password_resets')
+      .select('*')
+      .eq('token_hash', tokenHash)
+      .is('used_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!resetRow) return res.status(400).json({ error: 'Invalid or expired reset token' });
+
+    if (resetRow.expires_at && new Date(resetRow.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 12);
+    const now = new Date().toISOString();
+
+    const { error: updateErr } = await supabaseAdmin
+      .from('users')
+      .update({ password_hash })
+      .eq('id', resetRow.user_id);
+    if (updateErr) throw updateErr;
+
+    await supabaseAdmin
+      .from('password_resets')
+      .update({ used_at: now })
+      .eq('id', resetRow.id);
+
+    logger.authEvent(resetRow.user_id, 'RESET_PASSWORD', req.ip);
+    return res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+}
+
 // GET /api/auth/me  (requires auth)
 async function me(req, res, next) {
   try {
-    const { data: user, error } = await supabaseAdmin
-      .from('users').select('id, name, email, role, createdat').eq('id', req.user.userId).single();
+    // Prefer avatar_url if the column exists; fall back cleanly if not.
+    let query = supabaseAdmin
+      .from('users')
+      .select('id, name, email, role, createdat, avatar_url')
+      .eq('id', req.user.userId);
+
+    let { data: user, error } = await query.single();
+    if (error && /avatar_url/i.test(error.message || '')) {
+      ({ data: user, error } = await supabaseAdmin
+        .from('users')
+        .select('id, name, email, role, createdat')
+        .eq('id', req.user.userId)
+        .single());
+    }
+
     if (error || !user) return res.status(404).json({ error: 'User not found' });
     res.json({ ...user, created_at: user.createdat });
   } catch (err) {
@@ -84,4 +206,4 @@ async function me(req, res, next) {
   }
 }
 
-module.exports = { register, login, me };
+module.exports = { register, login, forgot, reset, me };

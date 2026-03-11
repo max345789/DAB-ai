@@ -4,45 +4,7 @@
 //  audience targeting. Saves all ads to the database.
 // ─────────────────────────────────────────────────────────────
 const { supabaseAdmin } = require('./supabaseClient');
-
-// ── Internal AI caller (duplicated for independence) ──────────
-async function _aiCall(systemPrompt, userPrompt) {
-  const PROVIDER = process.env.AI_PROVIDER ||
-    (process.env.ANTHROPIC_API_KEY ? 'anthropic' :
-     process.env.OPENAI_API_KEY    ? 'openai'    : 'fallback');
-
-  try {
-    if (PROVIDER === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
-      const Anthropic = require('@anthropic-ai/sdk');
-      const client    = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-      const msg       = await client.messages.create({
-        model: process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
-        max_tokens: 1500,
-        system  : systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      });
-      return msg.content?.[0]?.text?.trim() || null;
-    }
-
-    if (PROVIDER === 'openai' && process.env.OPENAI_API_KEY) {
-      const OpenAI    = require('openai');
-      const client    = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-      const completion= await client.chat.completions.create({
-        model  : process.env.OPENAI_MODEL || 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userPrompt   },
-        ],
-        max_tokens: 1500,
-      });
-      return completion.choices?.[0]?.message?.content?.trim() || null;
-    }
-  } catch (err) {
-    console.warn('[CampaignGenerator] provider call failed:', err.message);
-  }
-
-  return null;
-}
+const { callAI } = require('./aiService');
 
 // ─────────────────────────────────────────────────────────────
 //  Rule-based fallback ad generator
@@ -131,12 +93,15 @@ Campaign Goal: ${goal}`;
 
   let generated = null;
   let aiGenerated = false;
-  const aiProvider = process.env.AI_PROVIDER ||
-    (process.env.ANTHROPIC_API_KEY ? 'anthropic' :
-     process.env.OPENAI_API_KEY    ? 'openai'    : 'fallback');
+  const aiProvider = process.env.AI_GATEWAY_ENABLED === 'false'
+    ? (process.env.AI_PROVIDER || 'fallback')
+    : 'gateway';
 
   try {
-    const raw = await _aiCall(systemPrompt, userPrompt);
+    const raw = await callAI(systemPrompt, userPrompt, {
+      maxTokens: 1500,
+      metadata: { feature: 'campaign_generator', campaignId },
+    });
     if (raw) {
       generated = JSON.parse(raw.replace(/```json|```/g, '').trim());
       aiGenerated = true;

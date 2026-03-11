@@ -9,9 +9,9 @@ import type { NextConfig } from "next";
  *
  * Local development:
  *   Create .env.local at the project root containing:
- *     NEXT_PUBLIC_API_BASE=http://localhost:5000/api
+ *     NEXT_PUBLIC_API_BASE=http://localhost:5001/api
  *   Or leave it empty to use the /api proxy rewrite below which
- *   forwards all /api/* requests to the local backend at port 5000.
+ *   forwards all /api/* requests to the local backend at port 5001.
  */
 const nextConfig: NextConfig = {
   async rewrites() {
@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:5000/api/:path*",
+        destination: "http://localhost:5001/api/:path*",
       },
     ];
   },

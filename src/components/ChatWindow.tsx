@@ -36,6 +36,8 @@ export function ChatWindow() {
   const [messages, setMessages] = useState<ChatMessage[]>(seedMessages);
   const [isSending, setIsSending] = useState(false);
   const [showLeadCapture, setShowLeadCapture] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [lastPrompt, setLastPrompt] = useState<string | null>(null);
   const streamRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const suggestedPrompts = useMemo(
@@ -86,6 +88,8 @@ export function ChatWindow() {
   }
 
   async function handleSend(message: string) {
+    setChatError(null);
+    setLastPrompt(message);
     const userMessage: ChatMessage = {
       id: uuidv4(),
       role: "user",
@@ -105,19 +109,27 @@ export function ChatWindow() {
     }
     setIsSending(true);
 
-    const response = await postChat(message);
+    try {
+      const response = await postChat(message);
 
-    const aiMessage: ChatMessage = {
-      id: uuidv4(),
-      role: "assistant",
-      content: "",
-      createdAt: new Date().toISOString(),
-      status: "streaming",
-    };
-    setMessages((prev) =>
-      prev.filter((msg) => msg.id !== processingMessage.id).concat(aiMessage)
-    );
-    streamMessage(aiMessage.id, response.reply);
+      const aiMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        status: "streaming",
+      };
+      setMessages((prev) =>
+        prev.filter((msg) => msg.id !== processingMessage.id).concat(aiMessage)
+      );
+      streamMessage(aiMessage.id, response.reply);
+    } catch (error) {
+      setMessages((prev) => prev.filter((msg) => msg.id !== processingMessage.id));
+      setIsSending(false);
+      setChatError(
+        error instanceof Error ? error.message : "Could not reach chat service."
+      );
+    }
   }
 
   useEffect(() => {
@@ -178,6 +190,23 @@ export function ChatWindow() {
           </div>
 
           <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-800">
+            {chatError ? (
+              <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                <p>{chatError}</p>
+                {lastPrompt ? (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => handleSend(lastPrompt)}
+                    >
+                      Retry last message
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {suggestedPrompts.map((prompt) => (
                 <button

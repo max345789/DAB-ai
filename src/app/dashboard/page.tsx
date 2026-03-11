@@ -6,10 +6,27 @@ import { ActivityFeed } from "@/components/ActivityFeed";
 import { AutomationPanel } from "@/components/AutomationPanel";
 import { InsightsPanel } from "@/components/InsightsPanel";
 import { SystemHealth } from "@/components/SystemHealth";
+import { ApiErrorState } from "@/components/ApiErrorState";
 import { getDashboard } from "@/lib/api";
 
 export default async function DashboardPage() {
-  const metrics = await getDashboard();
+  let metrics;
+
+  try {
+    metrics = await getDashboard();
+  } catch (error) {
+    return (
+      <ApiErrorState
+        title="Dashboard unavailable"
+        message={
+          error instanceof Error
+            ? error.message
+            : "Could not load dashboard data."
+        }
+      />
+    );
+  }
+
   const safeNumber = (value: number | null | undefined) => {
     const resolved = Number(value);
     return Number.isFinite(resolved) ? resolved : 0;

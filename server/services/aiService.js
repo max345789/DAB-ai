@@ -9,6 +9,7 @@ const Anthropic = process.env.ANTHROPIC_API_KEY
 const OpenAI = process.env.OPENAI_API_KEY
   ? require('openai')
   : null;
+const { requestModelPrompt } = require('./aiGatewayClient');
 
 // ── Provider selection ────────────────────────────────────────
 const PROVIDER = process.env.AI_PROVIDER ||
@@ -26,7 +27,7 @@ if (PROVIDER === 'openai' && OpenAI) {
 }
 
 // ── Core AI call (provider-agnostic) ─────────────────────────
-async function callAI(systemPrompt, userPrompt, opts = {}) {
+async function callAIProviderDirect(systemPrompt, userPrompt, opts = {}) {
   const maxTokens = Number(opts.maxTokens || 1024);
 
   try {
@@ -58,6 +59,26 @@ async function callAI(systemPrompt, userPrompt, opts = {}) {
   return null; // triggers fallback behavior in caller
 }
 
+async function callAI(systemPrompt, userPrompt, opts = {}) {
+  const gatewayEnabled = process.env.AI_GATEWAY_ENABLED !== 'false' && process.env.AI_WORKER_MODE !== 'true';
+
+  if (gatewayEnabled) {
+    try {
+      return await requestModelPrompt({
+        systemPrompt,
+        userPrompt,
+        maxTokens: opts.maxTokens,
+        userId: opts.userId || null,
+        metadata: opts.metadata || {},
+      });
+    } catch (err) {
+      console.warn('[aiService] gateway call failed:', err.message);
+    }
+  }
+
+  return callAIProviderDirect(systemPrompt, userPrompt, opts);
+}
+
 function templateChatReply(message) {
   return `I can help with campaigns, leads, follow-ups, meetings, and finance.
 
@@ -75,7 +96,9 @@ If user asks for an action, return a direct action-oriented response in plain te
   if (reply) {
     return {
       reply,
-      source: PROVIDER,
+      source: process.env.AI_GATEWAY_ENABLED !== 'false' && process.env.AI_WORKER_MODE !== 'true'
+        ? 'gateway'
+        : PROVIDER,
       used_fallback: false,
     };
   }
@@ -295,4 +318,6 @@ module.exports = {
   scoreTier,
   PROVIDER,
   _callAI: callAI,
+  callAI,
+  callAIProviderDirect,
 };

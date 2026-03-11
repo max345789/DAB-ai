@@ -126,7 +126,7 @@ pm2 startup
 # Nginx reverse proxy (example config)
 # server {
 #   server_name api.yourdomain.com;
-#   location / { proxy_pass http://localhost:5000; }
+#   location / { proxy_pass http://localhost:5001; }
 # }
 ```
 
@@ -240,12 +240,12 @@ npm run dev            # nodemon, port 5000
 # Terminal 2 – Frontend
 cd ..                  # project root
 cp .env.example .env.local
-# Set NEXT_PUBLIC_API_BASE=http://localhost:5000/api  (or leave empty to use proxy)
+# Set NEXT_PUBLIC_API_BASE=http://localhost:5001/api  (or leave empty to use proxy)
 npm install
 npm run dev            # Next.js, port 3000
 ```
 
-The Next.js dev server proxies `/api/*` → `localhost:5000/api/*` via `next.config.ts`, so you can also leave `NEXT_PUBLIC_API_BASE` empty during local development.
+The Next.js dev server proxies `/api/*` → `localhost:5001/api/*` via `next.config.ts`, so you can also leave `NEXT_PUBLIC_API_BASE` empty during local development.
 
 ---
 

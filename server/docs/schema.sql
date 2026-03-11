@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
   createdat     TIMESTAMPTZ DEFAULT NOW()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updatedat TIMESTAMPTZ;
+
 -- ── CAMPAIGNS ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS campaigns (
   id               SERIAL PRIMARY KEY,
@@ -156,6 +159,20 @@ CREATE TABLE IF NOT EXISTS agent_activity (
   user_id     INTEGER,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ── PASSWORD_RESETS ───────────────────────────────────────────
+-- Supports /api/auth/forgot + /api/auth/reset for custom auth.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(token_hash);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user_id    ON password_resets(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_agent_activity_created_at ON agent_activity(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_agent_activity_category   ON agent_activity(category);
