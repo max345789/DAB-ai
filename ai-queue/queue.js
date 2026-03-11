@@ -1,6 +1,24 @@
 const { createHash, randomUUID } = require('crypto');
-const IORedis = require('ioredis');
-const { Queue, QueueEvents } = require('bullmq');
+const path = require('path');
+
+// Monorepo deploy note (Render):
+// If the backend service is deployed with Root Directory = `server/`, then
+// `ai-queue` is outside that folder and cannot see `server/node_modules` via
+// Node's normal module resolution (which only walks parent directories).
+// This fallback keeps production deploys working without forcing workspace tooling.
+function requireWithFallback(packageName) {
+  try {
+    return require(packageName);
+  } catch (error) {
+    if (error && error.code !== 'MODULE_NOT_FOUND') throw error;
+  }
+
+  const fallbackPath = path.resolve(__dirname, `../server/node_modules/${packageName}`);
+  return require(fallbackPath);
+}
+
+const IORedis = requireWithFallback('ioredis');
+const { Queue, QueueEvents } = requireWithFallback('bullmq');
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
 const AI_QUEUE_NAME = process.env.AI_QUEUE_NAME || 'dab-ai-tasks';
