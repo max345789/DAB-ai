@@ -9,7 +9,7 @@ function validateAIRequestBody(body = {}) {
     errors.push(`task must be one of: ${AI_TASK_VALUES.join(', ')}`);
   }
 
-  if (body.user_id !== undefined && typeof body.user_id !== 'string') {
+  if (body.user_id !== undefined && body.user_id !== null && typeof body.user_id !== 'string') {
     errors.push('user_id must be a string when provided');
   }
 

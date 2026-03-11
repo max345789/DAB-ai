@@ -16,6 +16,39 @@ function maybeMockResponse(promptPayload) {
   };
 }
 
+async function sendPromptViaOllama(promptPayload) {
+  const { systemPrompt, userPrompt } = promptPayload;
+  const baseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+  const model = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+  const maxTokens = Number(promptPayload.maxTokens || 900);
+
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      options: {
+        num_predict: maxTokens,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Ollama error: ${response.status} ${text}`);
+  }
+
+  const data = await response.json();
+  const content = data?.message?.content?.trim();
+  if (!content) throw new Error('Ollama returned an empty response');
+  return content;
+}
+
 function execClaude(args, opts = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.env.CLAUDE_WORKER_BIN || 'claude', args, {
@@ -69,6 +102,11 @@ function execClaude(args, opts = {}) {
 }
 
 async function sendPrompt(promptPayload) {
+  // Allow running the worker with a local LLM (no API cost).
+  if ((process.env.AI_PROVIDER || '').toLowerCase() === 'ollama') {
+    return sendPromptViaOllama(promptPayload);
+  }
+
   const { systemPrompt, userPrompt } = promptPayload;
   const args = [
     '-p',
@@ -106,7 +144,7 @@ async function receiveResponse(taskEnvelope) {
   const content = await sendPrompt(taskEnvelope);
   return {
     content,
-    provider: 'claude-code',
+    provider: (process.env.AI_PROVIDER || '').toLowerCase() === 'ollama' ? 'ollama' : 'claude-code',
   };
 }
 

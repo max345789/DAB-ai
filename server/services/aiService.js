@@ -31,6 +31,36 @@ async function callAIProviderDirect(systemPrompt, userPrompt, opts = {}) {
   const maxTokens = Number(opts.maxTokens || 1024);
 
   try {
+    if (PROVIDER === 'ollama') {
+      const baseUrl = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+      const model = process.env.OLLAMA_MODEL || 'llama3.2:3b';
+
+      const response = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          stream: false,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          options: {
+            // Rough analogue to max_tokens. Ollama uses num_predict.
+            num_predict: maxTokens,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Ollama error: ${response.status} ${text}`);
+      }
+
+      const data = await response.json();
+      return data?.message?.content?.trim() || null;
+    }
+
     if (PROVIDER === 'anthropic' && anthropicClient) {
       const msg = await anthropicClient.messages.create({
         model     : process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001',
