@@ -17,11 +17,11 @@ async function getProfile(req, res, next) {
     // avatar_url may not exist depending on migration state
     let { data: user, error } = await supabaseAdmin
       .from('users')
-      .select('id, name, email, role, createdat, avatar_url')
+      .select('id, name, email, role, createdat, avatar_url, phone, dob, country, bio')
       .eq('id', userId)
       .single();
 
-    if (error && /avatar_url/i.test(error.message || '')) {
+    if (error && /(avatar_url|phone|dob|country|bio)/i.test(error.message || '')) {
       ({ data: user, error } = await supabaseAdmin
         .from('users')
         .select('id, name, email, role, createdat')
@@ -31,6 +31,33 @@ async function getProfile(req, res, next) {
 
     if (error || !user) return res.status(404).json({ error: 'User not found' });
     return res.json({ ...user, created_at: user.createdat });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function updateProfile(req, res, next) {
+  try {
+    const userId = req.user.userId;
+    const { name, phone, dob, country, bio } = req.body || {};
+
+    const patch = {};
+    if (name !== undefined) patch.name = name;
+    if (phone !== undefined) patch.phone = phone;
+    if (dob !== undefined) patch.dob = dob;
+    if (country !== undefined) patch.country = country;
+    if (bio !== undefined) patch.bio = bio;
+    patch.updatedat = new Date().toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update(patch)
+      .eq('id', userId)
+      .select('id, name, email, role, createdat, avatar_url, phone, dob, country, bio')
+      .single();
+
+    if (error) throw error;
+    return res.json({ success: true, profile: { ...data, created_at: data.createdat } });
   } catch (err) {
     next(err);
   }
@@ -81,6 +108,6 @@ async function uploadAvatar(req, res, next) {
 
 module.exports = {
   getProfile,
+  updateProfile,
   uploadAvatar,
 };
-
