@@ -319,6 +319,10 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.error || "Avatar upload failed");
+      // Show immediately even if the backend couldn't persist avatar_url on the user row.
+      if (data?.avatar_url) {
+        setMe((prev) => (prev ? { ...prev, avatar_url: data.avatar_url } : prev));
+      }
       await loadProfile();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Avatar upload failed");

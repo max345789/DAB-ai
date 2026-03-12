@@ -4,10 +4,34 @@ const { supabaseAdmin } = require('../services/supabaseClient');
 const logger = require('../services/loggerService');
 
 async function ensureAvatarBucket() {
+  // If the server is running with only the anon key, we cannot manage buckets.
+  // In that case we fail with a clear message.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Storage bucket setup requires SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  const bucketName = 'avatars';
+
+  // Prefer an explicit existence check so we can fail loudly if Storage is disabled.
   try {
-    // createBucket throws if already exists; ignore.
-    await supabaseAdmin.storage.createBucket('avatars', { public: true });
-  } catch (_e) {}
+    const { data: buckets, error: listErr } = await supabaseAdmin.storage.listBuckets();
+    if (listErr) throw listErr;
+    if (Array.isArray(buckets) && buckets.some(b => b?.name === bucketName)) return;
+  } catch (err) {
+    logger.warn('PROFILE', 'Unable to list Supabase storage buckets', {
+      error: err?.message || String(err),
+    });
+    // Continue and try to create the bucket; listing can be blocked in some setups.
+  }
+
+  const { error: createErr } = await supabaseAdmin.storage.createBucket(bucketName, { public: true });
+  if (createErr && !/already exists/i.test(createErr.message || '')) {
+    logger.error('PROFILE', 'Failed to create Supabase storage bucket', {
+      bucket: bucketName,
+      error: createErr.message || String(createErr),
+    });
+    throw new Error(`Supabase Storage bucket '${bucketName}' is missing and could not be created: ${createErr.message}`);
+  }
 }
 
 async function getProfile(req, res, next) {
@@ -70,7 +94,19 @@ async function uploadAvatar(req, res, next) {
 
     if (!file) return res.status(400).json({ error: 'avatar file is required' });
 
-    await ensureAvatarBucket();
+    try {
+      await ensureAvatarBucket();
+    } catch (e) {
+      return res.status(500).json({
+        error: 'Avatar storage is not configured',
+        detail:
+          e instanceof Error
+            ? e.message
+            : 'Supabase Storage bucket "avatars" must exist and be public.',
+        action:
+          'In Supabase Dashboard → Storage, create a PUBLIC bucket named "avatars", then retry.',
+      });
+    }
 
     const ext = path.extname(file.originalname || '') || '.png';
     const filename = `user-${userId}/${Date.now()}${ext}`;
@@ -82,7 +118,16 @@ async function uploadAvatar(req, res, next) {
         upsert: true,
       });
 
-    if (error) throw error;
+    if (error) {
+      if (/bucket/i.test(error.message || '') && /not found/i.test(error.message || '')) {
+        return res.status(500).json({
+          error: 'Avatar bucket not found',
+          detail: error.message,
+          action: 'Create a PUBLIC Supabase Storage bucket named "avatars" and retry.',
+        });
+      }
+      throw error;
+    }
 
     const { data: publicUrlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(data.path);
     const avatarUrl = publicUrlData.publicUrl;
