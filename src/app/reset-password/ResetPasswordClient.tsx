@@ -5,8 +5,9 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const API_BASE = getClientApiBase();
 
 export function ResetPasswordClient() {
   const searchParams = useSearchParams();

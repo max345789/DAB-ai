@@ -5,8 +5,9 @@ import Link from "next/link";
 
 import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
+import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+const API_BASE = getClientApiBase();
 
 type Profile = {
   id: number;
@@ -774,4 +775,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
