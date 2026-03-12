@@ -6,8 +6,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = getClientApiBase();
-
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
@@ -21,7 +19,10 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/forgot`, {
+      const apiBase = getClientApiBase();
+      if (!apiBase) throw new Error("API base URL is not configured");
+
+      const response = await fetch(`${apiBase}/auth/forgot`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email }),

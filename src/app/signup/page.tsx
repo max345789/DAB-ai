@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/AuthProvider";
 import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = getClientApiBase();
-
 export default function SignupPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -25,7 +23,10 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/register`, {
+      const apiBase = getClientApiBase();
+      if (!apiBase) throw new Error("API base URL is not configured");
+
+      const response = await fetch(`${apiBase}/auth/register`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name, email, password }),

@@ -7,8 +7,6 @@ import { useAuth } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = getClientApiBase();
-
 type Profile = {
   id: number;
   name: string | null;
@@ -253,6 +251,12 @@ export default function ProfilePage() {
   const [country, setCountry] = useState("");
   const [bio, setBio] = useState("");
 
+  function requireApiBase() {
+    const apiBase = getClientApiBase();
+    if (!apiBase) throw new Error("API base URL is not configured");
+    return apiBase;
+  }
+
   useEffect(() => {
     setFirstName(initialFirst);
     setLastName(initialLast);
@@ -270,7 +274,8 @@ export default function ProfilePage() {
   async function loadProfile() {
     if (!token) return;
     setError(null);
-    const response = await fetch(`${API_BASE}/profile`, {
+    const apiBase = requireApiBase();
+    const response = await fetch(`${apiBase}/profile`, {
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -281,7 +286,8 @@ export default function ProfilePage() {
 
   async function loadIntegrations() {
     if (!token) return;
-    const response = await fetch(`${API_BASE}/integrations`, {
+    const apiBase = requireApiBase();
+    const response = await fetch(`${apiBase}/integrations`, {
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -302,10 +308,11 @@ export default function ProfilePage() {
     setError(null);
 
     try {
+      const apiBase = requireApiBase();
       const form = new FormData();
       form.append("avatar", file);
 
-      const response = await fetch(`${API_BASE}/profile/avatar`, {
+      const response = await fetch(`${apiBase}/profile/avatar`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: form,
@@ -325,7 +332,8 @@ export default function ProfilePage() {
     setIsSaving(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/profile`, {
+      const apiBase = requireApiBase();
+      const response = await fetch(`${apiBase}/profile`, {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -350,7 +358,8 @@ export default function ProfilePage() {
 
   async function connectIntegration(platform: string, credentials: Record<string, unknown>) {
     if (!token) throw new Error("Not signed in");
-    const response = await fetch(`${API_BASE}/integration/connect`, {
+    const apiBase = requireApiBase();
+    const response = await fetch(`${apiBase}/integration/connect`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -369,7 +378,8 @@ export default function ProfilePage() {
 
   async function disconnectIntegration(platform: string) {
     if (!token) throw new Error("Not signed in");
-    const response = await fetch(`${API_BASE}/integration/disconnect`, {
+    const apiBase = requireApiBase();
+    const response = await fetch(`${apiBase}/integration/disconnect`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,

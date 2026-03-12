@@ -7,8 +7,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getClientApiBase } from "@/lib/clientApiBase";
 
-const API_BASE = getClientApiBase();
-
 export function ResetPasswordClient() {
   const searchParams = useSearchParams();
   const token = useMemo(() => searchParams.get("token") || "", [searchParams]);
@@ -24,7 +22,10 @@ export function ResetPasswordClient() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/reset`, {
+      const apiBase = getClientApiBase();
+      if (!apiBase) throw new Error("API base URL is not configured");
+
+      const response = await fetch(`${apiBase}/auth/reset`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, password }),
