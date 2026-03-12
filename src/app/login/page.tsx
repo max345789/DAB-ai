@@ -33,7 +33,7 @@ export default function LoginPage() {
         throw new Error(data?.error || "Login failed");
       }
       login(data.token, data.user);
-      router.push("/dashboard");
+      router.push("/chat");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -43,34 +43,38 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl gap-10 lg:grid-cols-2">
-      <div className="rounded-3xl border border-white/10 bg-white/70 p-10 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">DAB AI</p>
-        <h1 className="mt-3 text-3xl font-semibold text-slate-900 dark:text-white">
-          Welcome back
-        </h1>
-        <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Sign in to manage campaigns, leads, automations, and reports.
-        </p>
+    <div className="mx-auto w-full max-w-md">
+      <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+        <div className="flex items-center gap-3">
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-xs font-semibold text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900">
+            D
+          </div>
+          <div>
+            <div className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              DAB AI
+            </div>
+            <div className="text-xs text-zinc-500">Sign in to continue</div>
+          </div>
+        </div>
 
         <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
-          <label className="flex flex-col gap-2 text-xs text-slate-500">
+          <label className="flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-300">
             Email
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-100"
+              className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:ring-zinc-100/10"
               placeholder="you@company.com"
               required
               type="email"
             />
           </label>
-          <label className="flex flex-col gap-2 text-xs text-slate-500">
+          <label className="flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-300">
             Password
             <input
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-100"
+              className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:ring-zinc-100/10"
               placeholder="Your password"
               required
               type="password"
@@ -78,38 +82,29 @@ export default function LoginPage() {
           </label>
 
           {error ? (
-            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
               {error}
             </div>
           ) : null}
 
-          <Button type="submit" disabled={isSubmitting}>
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="rounded-xl bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          >
             {isSubmitting ? "Signing in..." : "Sign in"}
           </Button>
 
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <Link className="hover:text-slate-900 dark:hover:text-slate-200" href="/forgot-password">
+          <div className="flex items-center justify-between text-xs text-zinc-500">
+            <Link className="hover:text-zinc-900 dark:hover:text-zinc-200" href="/forgot-password">
               Forgot password?
             </Link>
-            <Link className="hover:text-slate-900 dark:hover:text-slate-200" href="/signup">
+            <Link className="hover:text-zinc-900 dark:hover:text-zinc-200" href="/signup">
               Create account
             </Link>
           </div>
         </form>
       </div>
-
-      <div className="hidden rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/10 via-cyan-500/10 to-indigo-500/10 p-10 shadow-sm dark:border-slate-800 lg:block">
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          What you can do after login
-        </p>
-        <ul className="mt-4 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-          <li>Launch campaigns and generate ad variants.</li>
-          <li>Capture leads and run automated follow-ups.</li>
-          <li>Track spend, revenue, and ROAS with live metrics.</li>
-          <li>Monitor agent activity and automation history.</li>
-        </ul>
-      </div>
     </div>
   );
 }
-

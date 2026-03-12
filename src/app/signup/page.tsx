@@ -34,7 +34,7 @@ export default function SignupPage() {
         throw new Error(data?.error || "Sign up failed");
       }
       login(data.token, data.user);
-      router.push("/dashboard");
+      router.push("/chat");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed");
@@ -44,43 +44,48 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl rounded-3xl border border-white/10 bg-white/70 p-10 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
-      <p className="text-xs uppercase tracking-[0.3em] text-slate-500">DAB AI</p>
-      <h1 className="mt-3 text-3xl font-semibold text-slate-900 dark:text-white">
-        Create your account
-      </h1>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-        Start with a small budget, then scale as your campaigns perform.
-      </p>
+    <div className="mx-auto w-full max-w-md">
+      <div className="rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
+        <div className="flex items-center gap-3">
+          <div className="grid h-9 w-9 place-items-center rounded-full bg-zinc-900 text-xs font-semibold text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900">
+            D
+          </div>
+          <div>
+            <div className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Create account
+            </div>
+            <div className="text-xs text-zinc-500">Start using DAB AI</div>
+          </div>
+        </div>
 
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-xs text-slate-500">
-          Full name
+        <label className="flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+          Name
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-100"
-            placeholder="Sarath"
+            className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:ring-zinc-100/10"
+            placeholder="Your name"
             required
           />
         </label>
-        <label className="flex flex-col gap-2 text-xs text-slate-500">
+        <label className="flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-300">
           Email
           <input
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-100"
+            className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:ring-zinc-100/10"
             placeholder="you@company.com"
             required
             type="email"
           />
         </label>
-        <label className="flex flex-col gap-2 text-xs text-slate-500">
+        <label className="flex flex-col gap-2 text-xs text-zinc-600 dark:text-zinc-300">
           Password
           <input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="h-11 rounded-xl border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 dark:border-slate-800 dark:bg-slate-950/60 dark:text-slate-100"
+            className="h-11 rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-100 dark:focus:ring-zinc-100/10"
             placeholder="Create a password"
             required
             type="password"
@@ -88,23 +93,27 @@ export default function SignupPage() {
         </label>
 
         {error ? (
-          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
             {error}
           </div>
         ) : null}
 
-        <Button type="submit" disabled={isSubmitting}>
+        <Button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-xl bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        >
           {isSubmitting ? "Creating..." : "Create account"}
         </Button>
 
-        <div className="text-center text-xs text-slate-500">
+        <div className="text-center text-xs text-zinc-500">
           Already have an account?{" "}
-          <Link className="hover:text-slate-900 dark:hover:text-slate-200" href="/login">
+          <Link className="hover:text-zinc-900 dark:hover:text-zinc-200" href="/login">
             Sign in
           </Link>
         </div>
       </form>
+      </div>
     </div>
   );
 }
-
