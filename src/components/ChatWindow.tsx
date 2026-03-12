@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from "uuid";
 
 import { postChat, type ChatMessage } from "@/lib/api";
 import { ChatInput } from "@/components/ChatInput";
-import { Card } from "@/components/ui/card";
 import { LeadForm } from "@/components/LeadForm";
 import { Button } from "@/components/ui/button";
 
@@ -141,89 +140,71 @@ export function ChatWindow() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col gap-6">
-      <Card className="flex-1 overflow-hidden border-white/10 bg-white/70 dark:border-slate-800 dark:bg-slate-950/70">
-        <div className="flex h-full flex-col">
-          <div className="border-b border-slate-200/70 px-6 py-4 dark:border-slate-800">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-100">
-                  DAB AI Assistant
-                </p>
-                <p className="text-xs text-slate-500">
-                  Always-on marketing operations
-                </p>
-              </div>
-              {isSending ? (
-                <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] text-emerald-200">
-                  Executing tasks
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-            {messages.map((message) => {
-              const isUser = message.role === "user";
-              return (
-                <div
-                  key={message.id}
-                  className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm shadow-sm ${
-                      isUser
-                        ? "bg-gradient-to-br from-emerald-400/90 via-cyan-400/90 to-indigo-500/90 text-slate-950"
-                        : "border border-white/30 bg-white/80 text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
-                    }`}
-                  >
-                    <p className="leading-relaxed">{message.content}</p>
-                    {message.status === "processing" ? (
-                      <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                        Task queue running...
-                      </p>
-                    ) : null}
-                  </div>
+    <div className="flex h-[calc(100vh-6.5rem)] flex-col">
+      <div className="flex-1 overflow-y-auto px-1 pb-4 pt-4">
+        <div className="space-y-6">
+          {messages.map((message) => {
+            const isUser = message.role === "user";
+            return (
+              <div key={message.id} className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  {isUser ? "You" : "DAB AI"}
+                  {message.status === "processing" ? " · Working" : ""}
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="border-t border-slate-200/70 px-6 py-4 dark:border-slate-800">
-            {chatError ? (
-              <div className="mb-4 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
-                <p>{chatError}</p>
-                {lastPrompt ? (
-                  <div className="mt-3">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => handleSend(lastPrompt)}
-                    >
-                      Retry last message
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              {suggestedPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  onClick={() => handleSend(prompt)}
-                  className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-slate-800 dark:text-slate-300 dark:hover:border-slate-600 dark:hover:text-slate-100"
-                  type="button"
+                <div
+                  className={[
+                    "rounded-2xl border px-4 py-3 text-sm leading-relaxed",
+                    isUser
+                      ? "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-100"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-100",
+                  ].join(" ")}
                 >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          </div>
+                  {message.content}
+                  {message.status === "processing" ? (
+                    <div className="mt-3 text-xs text-zinc-500">
+                      Task queue running…
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      </Card>
+      </div>
 
-      <ChatInput onSend={handleSend} isSending={isSending} />
+      {chatError ? (
+        <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
+          <div>{chatError}</div>
+          {lastPrompt ? (
+            <div className="mt-3">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleSend(lastPrompt)}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="space-y-3 pb-2">
+        <div className="flex flex-wrap gap-2">
+          {suggestedPrompts.map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => handleSend(prompt)}
+              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+              type="button"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+        <ChatInput onSend={handleSend} isSending={isSending} />
+      </div>
 
       {showLeadCapture ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-6 backdrop-blur dark:bg-slate-950/70">

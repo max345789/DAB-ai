@@ -24,13 +24,13 @@ export function ChatInput({ onSend, isSending }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/70 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/70">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
       <textarea
         ref={textareaRef}
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="Ask DAB AI to create ads, follow up, or book meetings..."
-        className="min-h-[84px] w-full resize-none rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-100 dark:placeholder:text-slate-600 dark:focus-visible:ring-slate-400 dark:focus-visible:ring-offset-slate-950"
+        placeholder="Message DAB AI…"
+        className="min-h-[72px] w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus-visible:ring-zinc-100/10"
         onKeyDown={(event) => {
           if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
             event.preventDefault();
@@ -38,12 +38,12 @@ export function ChatInput({ onSend, isSending }: Props) {
           }
         }}
       />
-      <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>Press Cmd + Enter to send</span>
+      <div className="mt-2 flex items-center justify-between text-xs text-zinc-500">
+        <span>Cmd or Ctrl + Enter</span>
         <Button
           onClick={handleSubmit}
           disabled={isSending}
-          className="rounded-xl"
+          className="rounded-xl bg-zinc-900 text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
         >
           {isSending ? "Sending..." : "Send"}
         </Button>

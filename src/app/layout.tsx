@@ -23,9 +23,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.variable} antialiased`}>
         <AppProviders>
-          <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,118,110,0.18),_transparent_45%),radial-gradient(circle_at_25%_15%,_rgba(14,165,233,0.18),_transparent_45%),linear-gradient(180deg,_#f8fafc_0%,_#e2e8f0_100%)] text-slate-900 dark:bg-[radial-gradient(circle_at_top,_rgba(45,212,191,0.12),_transparent_45%),radial-gradient(circle_at_20%_20%,_rgba(99,102,241,0.18),_transparent_40%),linear-gradient(180deg,_#0b0f14_0%,_#05070b_100%)] dark:text-slate-100">
+          <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
             <TopNav />
-            <main className="mx-auto w-full max-w-[1400px] px-6 py-8">
+            <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
               {children}
             </main>
           </div>
