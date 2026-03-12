@@ -9,7 +9,6 @@ const Anthropic = process.env.ANTHROPIC_API_KEY
 const OpenAI = process.env.OPENAI_API_KEY
   ? require('openai')
   : null;
-const { requestModelPrompt } = require('./aiGatewayClient');
 
 // ── Provider selection ────────────────────────────────────────
 const PROVIDER = process.env.AI_PROVIDER ||
@@ -90,10 +89,21 @@ async function callAIProviderDirect(systemPrompt, userPrompt, opts = {}) {
 }
 
 async function callAI(systemPrompt, userPrompt, opts = {}) {
-  const gatewayEnabled = process.env.AI_GATEWAY_ENABLED !== 'false' && process.env.AI_WORKER_MODE !== 'true';
+  const redisUrl = process.env.REDIS_URL || '';
+  const hasRealRedis =
+    !!redisUrl &&
+    !(process.env.NODE_ENV === 'production' && /127\.0\.0\.1|localhost/.test(redisUrl));
+
+  const gatewayEnabled =
+    process.env.AI_GATEWAY_ENABLED !== 'false' &&
+    process.env.AI_WORKER_MODE !== 'true' &&
+    hasRealRedis;
 
   if (gatewayEnabled) {
     try {
+      // Lazy-load gateway client so production deployments without Redis
+      // do not crash at startup.
+      const { requestModelPrompt } = require('./aiGatewayClient');
       return await requestModelPrompt({
         systemPrompt,
         userPrompt,
