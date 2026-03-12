@@ -17,10 +17,14 @@ function requireWithFallback(packageName) {
   return require(fallbackPath);
 }
 
-const IORedis = requireWithFallback('ioredis');
-const { Queue, QueueEvents } = requireWithFallback('bullmq');
-
-const REDIS_URL = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
+// In production we do not assume a local Redis exists.
+// If REDIS_URL is not set, the queue layer becomes "disabled" and all
+// queue-dependent operations will throw (while status/metrics return zeros).
+//
+// NOTE: We only default to localhost Redis in explicit local development.
+// (Render often does not set NODE_ENV, and we must not attempt 127.0.0.1 there.)
+const REDIS_URL = process.env.REDIS_URL || (process.env.NODE_ENV === 'development' ? 'redis://127.0.0.1:6379' : '');
+const REDIS_ENABLED = Boolean(REDIS_URL);
 const AI_QUEUE_NAME = process.env.AI_QUEUE_NAME || 'dab-ai-tasks';
 const RESULT_QUEUE_NAME = process.env.AI_RESULT_QUEUE_NAME || 'dab-ai-results';
 const FAILED_QUEUE_NAME = process.env.AI_FAILED_QUEUE_NAME || 'dab-ai-failed';
@@ -28,41 +32,70 @@ const TASK_TTL_SECONDS = Number(process.env.AI_TASK_TTL_SECONDS || 24 * 60 * 60)
 const CACHE_TTL_SECONDS = Number(process.env.AI_CACHE_TTL_SECONDS || 60 * 60);
 const RATE_LIMIT_WINDOW_SECONDS = Number(process.env.AI_RATE_LIMIT_WINDOW_SECONDS || 60 * 60);
 
-const connection = new IORedis(REDIS_URL, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
-});
+function requireRedis() {
+  if (!REDIS_ENABLED) {
+    throw new Error('Redis is not configured (set REDIS_URL to enable the AI queue)');
+  }
+}
 
-const queue = new Queue(AI_QUEUE_NAME, {
-  connection,
-  defaultJobOptions: {
-    attempts: Number(process.env.AI_QUEUE_ATTEMPTS || 3),
-    backoff: {
-      type: 'exponential',
-      delay: Number(process.env.AI_QUEUE_BACKOFF_MS || 1000),
-    },
-    removeOnComplete: 250,
-    removeOnFail: 500,
-  },
-});
+let IORedis;
+let Queue;
+let QueueEvents;
 
-const resultQueue = new Queue(RESULT_QUEUE_NAME, {
-  connection,
-  defaultJobOptions: {
-    removeOnComplete: 250,
-    removeOnFail: 250,
-  },
-});
+if (REDIS_ENABLED) {
+  IORedis = requireWithFallback('ioredis');
+  ({ Queue, QueueEvents } = requireWithFallback('bullmq'));
+}
 
-const failedQueue = new Queue(FAILED_QUEUE_NAME, {
-  connection,
-  defaultJobOptions: {
-    removeOnComplete: 500,
-    removeOnFail: 500,
-  },
-});
+const connection = REDIS_ENABLED
+  ? new IORedis(REDIS_URL, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    })
+  : null;
 
-const queueEvents = new QueueEvents(AI_QUEUE_NAME, { connection });
+const queue = REDIS_ENABLED
+  ? new Queue(AI_QUEUE_NAME, {
+      connection,
+      defaultJobOptions: {
+        attempts: Number(process.env.AI_QUEUE_ATTEMPTS || 3),
+        backoff: {
+          type: 'exponential',
+          delay: Number(process.env.AI_QUEUE_BACKOFF_MS || 1000),
+        },
+        removeOnComplete: 250,
+        removeOnFail: 500,
+      },
+    })
+  : {
+      add: async () => {
+        requireRedis();
+      },
+      getJobCounts: async () => ({ waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, paused: 0 }),
+      count: async () => 0,
+    };
+
+const resultQueue = REDIS_ENABLED
+  ? new Queue(RESULT_QUEUE_NAME, {
+      connection,
+      defaultJobOptions: {
+        removeOnComplete: 250,
+        removeOnFail: 250,
+      },
+    })
+  : null;
+
+const failedQueue = REDIS_ENABLED
+  ? new Queue(FAILED_QUEUE_NAME, {
+      connection,
+      defaultJobOptions: {
+        removeOnComplete: 500,
+        removeOnFail: 500,
+      },
+    })
+  : null;
+
+const queueEvents = REDIS_ENABLED ? new QueueEvents(AI_QUEUE_NAME, { connection }) : null;
 
 function taskKey(taskId) {
   return `dab-ai:task:${taskId}`;
@@ -124,17 +157,20 @@ function buildTaskFingerprint({ task, userId = null, payload = {}, metadata = {}
 }
 
 async function persistTaskState(taskId, taskState) {
+  requireRedis();
   await connection.hset(taskKey(taskId), serializeTaskState(taskState));
   await connection.expire(taskKey(taskId), TASK_TTL_SECONDS);
 }
 
 async function getCachedTaskByFingerprint(fingerprint) {
+  requireRedis();
   const cachedTaskId = await connection.get(idempotencyKey(fingerprint));
   if (!cachedTaskId) return null;
   return getTaskState(cachedTaskId);
 }
 
 async function getCachedResult(fingerprint) {
+  requireRedis();
   const raw = await connection.get(cacheKey(fingerprint));
   if (!raw) return null;
 
@@ -146,14 +182,17 @@ async function getCachedResult(fingerprint) {
 }
 
 async function setCachedResult(fingerprint, value) {
+  requireRedis();
   await connection.set(cacheKey(fingerprint), JSON.stringify(value), 'EX', CACHE_TTL_SECONDS);
 }
 
 async function registerTaskFingerprint(fingerprint, taskId) {
+  requireRedis();
   await connection.set(idempotencyKey(fingerprint), taskId, 'EX', TASK_TTL_SECONDS);
 }
 
 async function enqueueTask({ task, userId = null, payload = {}, metadata = {} }) {
+  requireRedis();
   const fingerprint = buildTaskFingerprint({ task, userId, payload, metadata });
   const cachedResult = await getCachedResult(fingerprint);
 
@@ -209,6 +248,7 @@ async function enqueueTask({ task, userId = null, payload = {}, metadata = {} })
 }
 
 async function markTaskProcessing(taskId, workerId) {
+  requireRedis();
   const current = await getTaskState(taskId);
   const now = new Date().toISOString();
 
@@ -229,6 +269,7 @@ async function markTaskProcessing(taskId, workerId) {
 }
 
 async function recordTaskMetric(status, durationMs = 0) {
+  requireRedis();
   const payload = {
     completed_count: status === 'completed' ? 1 : 0,
     failed_count: status === 'failed' ? 1 : 0,
@@ -241,6 +282,7 @@ async function recordTaskMetric(status, durationMs = 0) {
 }
 
 async function pushResultEvent(taskId, payload) {
+  requireRedis();
   await resultQueue.add('task_result', {
     taskId,
     ...payload,
@@ -249,6 +291,7 @@ async function pushResultEvent(taskId, payload) {
 }
 
 async function pushFailedEvent(taskId, payload) {
+  requireRedis();
   await failedQueue.add('failed_task', {
     taskId,
     ...payload,
@@ -257,6 +300,7 @@ async function pushFailedEvent(taskId, payload) {
 }
 
 async function markTaskCompleted(taskId, result, meta = {}) {
+  requireRedis();
   const current = await getTaskState(taskId);
   const now = new Date().toISOString();
   const durationMs = current?.started_at
@@ -284,6 +328,7 @@ async function markTaskCompleted(taskId, result, meta = {}) {
 }
 
 async function markTaskFailed(taskId, error, meta = {}) {
+  requireRedis();
   const current = await getTaskState(taskId);
   const now = new Date().toISOString();
   const durationMs = current?.started_at
@@ -307,15 +352,24 @@ async function markTaskFailed(taskId, error, meta = {}) {
 }
 
 async function moveTaskToFailedQueue(taskId, payload) {
+  requireRedis();
   await pushFailedEvent(taskId, payload);
 }
 
 async function getTaskState(taskId) {
+  if (!REDIS_ENABLED) return null;
   const raw = await connection.hgetall(taskKey(taskId));
   return parseTaskState(raw);
 }
 
 async function waitForTaskResult(taskId, opts = {}) {
+  if (!REDIS_ENABLED) {
+    return {
+      task_id: taskId,
+      status: 'disabled',
+      error: { message: 'Redis is not configured (set REDIS_URL to enable the AI queue)' },
+    };
+  }
   const timeoutMs = Number(opts.timeoutMs || 20_000);
   const intervalMs = Number(opts.intervalMs || 250);
   const started = Date.now();
@@ -336,6 +390,7 @@ async function waitForTaskResult(taskId, opts = {}) {
 }
 
 async function updateWorkerHeartbeat(workerId, fields = {}) {
+  requireRedis();
   const now = new Date().toISOString();
   const payload = serializeTaskState({
     worker_id: workerId,
@@ -348,6 +403,7 @@ async function updateWorkerHeartbeat(workerId, fields = {}) {
 }
 
 async function listActiveWorkers() {
+  if (!REDIS_ENABLED) return [];
   const keys = await connection.keys(workerKey('*'));
   if (keys.length === 0) return [];
 
@@ -356,6 +412,15 @@ async function listActiveWorkers() {
 }
 
 async function getQueueMetrics() {
+  if (!REDIS_ENABLED) {
+    return {
+      queue_size: 0,
+      average_task_time_ms: 0,
+      worker_health: [],
+      failed_tasks_count: 0,
+      last_worker_ping: null,
+    };
+  }
   const rawMetrics = await connection.hgetall(metricsKey());
   const completedCount = Number(rawMetrics.completed_count || 0);
   const failedCount = Number(rawMetrics.failed_count || 0);
@@ -384,6 +449,20 @@ async function getQueueMetrics() {
 }
 
 async function getQueueStatus() {
+  if (!REDIS_ENABLED) {
+    return {
+      queue_name: AI_QUEUE_NAME,
+      queue_length: 0,
+      tasks_processing: 0,
+      tasks_delayed: 0,
+      tasks_failed: 0,
+      tasks_completed: 0,
+      workers_active: 0,
+      last_worker_ping: null,
+      workers: [],
+      disabled: true,
+    };
+  }
   const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
   const workers = await listActiveWorkers();
   const metrics = await getQueueMetrics();
@@ -402,6 +481,9 @@ async function getQueueStatus() {
 }
 
 async function enforceUserRateLimit(userId, limit = 20) {
+  if (!REDIS_ENABLED) {
+    return { allowed: true, current: 0, limit, ttl: 0, disabled: true };
+  }
   const key = rateLimitKey(userId || 'anonymous');
   const current = await connection.incr(key);
   if (current === 1) {
