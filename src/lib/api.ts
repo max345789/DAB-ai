@@ -457,41 +457,142 @@ function normalizeCampaign(raw: Record<string, unknown>): Campaign {
 
 export async function getDashboard(): Promise<DashboardMetrics> {
   try {
-    const response = await fetch(`${API_BASE}/dashboard/summary`, {
-      cache: "no-store",
-    });
-    if (!response.ok) {
+    const [summaryRes, activityRes, chartsRes, financeRes] = await Promise.allSettled([
+      fetch(apiUrl("/dashboard/summary"), { cache: "no-store" }),
+      fetch(apiUrl("/dashboard/activity"), { cache: "no-store" }),
+      fetch(apiUrl("/dashboard/charts?days=30"), { cache: "no-store" }),
+      fetch(apiUrl("/finance/summary"), { cache: "no-store" }),
+    ]);
+
+    if (summaryRes.status !== "fulfilled" || !summaryRes.value.ok) {
       if (ENABLE_MOCKS) return mockDashboard;
-      throw apiError("/dashboard/summary", response.status);
-    }
-    const data = (await response.json()) as
-      | DashboardMetrics
-      | {
-          success?: boolean;
-          summary?: Record<string, unknown>;
-        };
-
-    if (data && typeof data === "object" && "summary" in data) {
-      const summary = data.summary ?? {};
-      return {
-        totalLeads: Number(summary.total_leads ?? 0),
-        activeCampaigns: Number(summary.active_campaigns ?? 0),
-        adSpend: Number(summary.ad_spend ?? 0),
-        revenue: Number(summary.monthly_revenue ?? 0),
-        costPerLead: Number(summary.cost_per_lead ?? 0),
-        roas: Number(summary.roas ?? 0),
-        recentActions: mockDashboard.recentActions,
-        spendOverTime: mockDashboard.spendOverTime,
-        leadsOverTime: mockDashboard.leadsOverTime,
-        conversionTrend: mockDashboard.conversionTrend,
-      };
+      const status = summaryRes.status === "fulfilled" ? summaryRes.value.status : undefined;
+      throw apiError("/dashboard/summary", status);
     }
 
-    if (ENABLE_MOCKS) {
-      return (data as DashboardMetrics) ?? mockDashboard;
-    }
+    const summaryJson = (await summaryRes.value.json()) as {
+      success?: boolean;
+      summary?: Record<string, unknown>;
+    };
+    const summary = summaryJson.summary ?? {};
 
-    return data as DashboardMetrics;
+    const financeJson =
+      financeRes.status === "fulfilled" && financeRes.value.ok
+        ? ((await financeRes.value.json()) as {
+            success?: boolean;
+            finance_summary?: Record<string, unknown>;
+          })
+        : null;
+
+    const finance = financeJson?.finance_summary ?? {};
+
+    const chartsJson =
+      chartsRes.status === "fulfilled" && chartsRes.value.ok
+        ? ((await chartsRes.value.json()) as {
+            success?: boolean;
+            charts?: Record<string, unknown>;
+          })
+        : null;
+
+    const charts = (chartsJson?.charts ?? {}) as Record<string, unknown>;
+
+    const activityJson =
+      activityRes.status === "fulfilled" && activityRes.value.ok
+        ? ((await activityRes.value.json()) as {
+            success?: boolean;
+            activity?: Record<string, unknown>;
+          })
+        : null;
+
+    const activity = (activityJson?.activity ?? {}) as Record<string, unknown>;
+
+    const leadItems = Array.isArray(activity.recent_leads) ? (activity.recent_leads as any[]) : [];
+    const campaignItems = Array.isArray(activity.recent_campaigns)
+      ? (activity.recent_campaigns as any[])
+      : [];
+    const agentItems = Array.isArray(activity.agent_activity) ? (activity.agent_activity as any[]) : [];
+    const automationItems = Array.isArray(activity.automation_history)
+      ? (activity.automation_history as any[])
+      : [];
+    const meetingItems = Array.isArray(activity.upcoming_meetings)
+      ? (activity.upcoming_meetings as any[])
+      : [];
+
+    const recentActions = [
+      ...agentItems.map((a) => String(a.description ?? a.action ?? "").trim()).filter(Boolean),
+      ...automationItems
+        .map((h) => String(h.action_taken ?? h.action ?? h.rule_name ?? "").trim())
+        .filter(Boolean),
+      ...campaignItems
+        .map((c) => {
+          const name = String(c.name ?? "Campaign").trim();
+          const platform = String(c.platform ?? "").trim();
+          return platform ? `Campaign: ${name} (${platform})` : `Campaign: ${name}`;
+        })
+        .filter(Boolean),
+      ...leadItems
+        .map((l) => {
+          const name = String(l.name ?? "Lead").trim();
+          const email = String(l.email ?? "").trim();
+          return email ? `New lead: ${name} (${email})` : `New lead: ${name}`;
+        })
+        .filter(Boolean),
+      ...meetingItems
+        .map((m) => {
+          const title = String(m.title ?? "Meeting").trim();
+          const date = String(m.date ?? "").trim();
+          const time = String(m.time ?? "").trim();
+          const when = [date, time].filter(Boolean).join(" ");
+          return when ? `Meeting scheduled: ${title} (${when})` : `Meeting scheduled: ${title}`;
+        })
+        .filter(Boolean),
+    ]
+      .map((s) => s.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, 12);
+
+    const spendOverTime = Array.isArray(charts.spend_over_time)
+      ? (charts.spend_over_time as any[])
+          .map((p) => ({
+            date: String(p.date ?? ""),
+            spend: Number(p.spend ?? 0),
+          }))
+          .filter((p) => p.date)
+      : [];
+
+    const leadsOverTime = Array.isArray(charts.leads_over_time)
+      ? (charts.leads_over_time as any[])
+          .map((p) => ({
+            date: String(p.date ?? ""),
+            leads: Number(p.count ?? 0),
+          }))
+          .filter((p) => p.date)
+      : [];
+
+    // Not all backends provide a conversion trend series. Keep empty unless present later.
+    const conversionTrend: DashboardMetrics["conversionTrend"] = [];
+
+    const totalLeads = Number(summary.total_leads ?? 0);
+    const activeCampaigns = Number(summary.active_campaigns ?? 0);
+    const adSpend = Number(summary.ad_spend ?? 0);
+
+    const totalSpend = Number(finance.total_spend ?? 0);
+    const totalRevenue = Number(finance.total_revenue ?? 0);
+    const costPerLead = Number(finance.cost_per_lead ?? 0) || (totalLeads > 0 ? totalSpend / totalLeads : 0);
+    const roas = Number(finance.roas ?? 0);
+
+    return {
+      totalLeads,
+      activeCampaigns,
+      adSpend,
+      revenue: totalRevenue || Number(summary.monthly_revenue ?? 0),
+      costPerLead,
+      roas,
+      recentActions: recentActions.length ? recentActions : [],
+      spendOverTime,
+      leadsOverTime,
+      conversionTrend,
+    };
   } catch (error) {
     console.warn("Dashboard fetch failed:", toErrorMessage(error));
     if (ENABLE_MOCKS) return mockDashboard;
