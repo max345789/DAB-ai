@@ -105,8 +105,25 @@ export type OptimizationSuggestion = {
  *
  * All fetch paths below are relative to this base.
  */
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
+import { getClientApiBase } from "@/lib/clientApiBase";
+
+const STATIC_API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 const ENABLE_MOCKS = process.env.NEXT_PUBLIC_ENABLE_MOCKS === "true";
+
+function apiBase() {
+  if (typeof window !== "undefined") {
+    return getClientApiBase();
+  }
+  return STATIC_API_BASE;
+}
+
+function apiUrl(path: string) {
+  const base = apiBase();
+  return `${base}${path}`;
+}
+
+// Back-compat for existing calls in this module.
+const API_BASE = apiBase();
 
 const mockDashboard: DashboardMetrics = {
   totalLeads: 1248,
@@ -513,12 +530,19 @@ export async function getLeads(): Promise<Lead[]> {
   }
 }
 
-export async function postChat(message: string): Promise<{ reply: string }> {
+export async function postChat(
+  message: string,
+  opts?: { sessionId?: number | null; userId?: number | null }
+): Promise<{ reply: string }> {
   try {
-    const response = await fetch(`${API_BASE}/chat`, {
+    const response = await fetch(apiUrl("/chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        session_id: opts?.sessionId ?? null,
+        user_id: opts?.userId ?? null,
+      }),
     });
     if (!response.ok) {
       throw apiError("/chat", response.status);
@@ -529,6 +553,36 @@ export async function postChat(message: string): Promise<{ reply: string }> {
     console.warn("Chat fetch failed:", toErrorMessage(error));
     throw error;
   }
+}
+
+export async function getChatHistory(opts: {
+  sessionId: number;
+  userId?: number | null;
+  limit?: number;
+}): Promise<ChatMessage[]> {
+  const params = new URLSearchParams();
+  params.set("session_id", String(opts.sessionId));
+  if (opts.userId != null) params.set("user_id", String(opts.userId));
+  params.set("limit", String(opts.limit ?? 200));
+
+  const response = await fetch(apiUrl(`/chat/history?${params.toString()}`), {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw apiError("/chat/history", response.status);
+  }
+
+  const data = (await response.json()) as any;
+  const rows: any[] = Array.isArray(data?.conversations) ? data.conversations : [];
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    role: row.role === "assistant" ? "assistant" : "user",
+    content: String(row.message ?? ""),
+    createdAt: String(row.timestamp ?? row.createdat ?? new Date().toISOString()),
+    status: "complete",
+  })) as ChatMessage[];
 }
 
 export async function getCampaigns(): Promise<Campaign[]> {

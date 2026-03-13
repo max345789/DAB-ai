@@ -12,6 +12,7 @@ import {
   setStoredUser,
   type AuthUser,
 } from "@/lib/auth";
+import { getClientApiBase } from "@/lib/clientApiBase";
 
 type AuthContextValue = {
   token: string | null;
@@ -23,8 +24,6 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -52,7 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const currentToken = getAuthToken();
     if (!currentToken) return;
 
-    const response = await fetch(`${API_BASE}/auth/me`, {
+    const apiBase = getClientApiBase();
+    if (!apiBase) return;
+
+    const response = await fetch(`${apiBase}/auth/me`, {
       cache: "no-store",
       headers: {
         Authorization: `Bearer ${currentToken}`,
@@ -105,4 +107,3 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 }
-
