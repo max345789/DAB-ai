@@ -1,17 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/components/AuthProvider";
 
-const primaryTabs = [
-  { label: "Chat", href: "/chat" },
-  { label: "Dashboard", href: "/dashboard" },
-] as const;
-
 export function TopNav() {
-  const pathname = usePathname();
   const { user, isReady } = useAuth();
 
   return (
@@ -26,25 +19,7 @@ export function TopNav() {
           </span>
         </Link>
 
-        <nav className="flex items-center rounded-full border border-zinc-200 bg-white/60 p-1 text-sm dark:border-zinc-800 dark:bg-zinc-900/40">
-          {primaryTabs.map((tab) => {
-            const active = pathname === tab.href;
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={[
-                  "rounded-full px-3 py-1.5 transition",
-                  active
-                    ? "bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900"
-                    : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100",
-                ].join(" ")}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex-1" />
 
         <div className="flex items-center gap-2">
           {isReady ? (
