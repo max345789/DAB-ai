@@ -14,6 +14,7 @@ require('dotenv').config({ path: process.env.ENV_FILE || path.resolve(__dirname,
 const express = require('express');
 const cors    = require('cors');
 const morgan  = require('morgan');
+const rateLimit = require('express-rate-limit');
 
 // ── Routes (Stages 1-4) ───────────────────────────────────────
 const chatRoutes      = require('./routes/chatRoutes');
@@ -67,12 +68,32 @@ app.use(cors({
 
 // ── Global Middleware ─────────────────────────────────────────
 app.use(express.json({
+  limit: process.env.JSON_BODY_LIMIT || '256kb',
   verify: (req, _res, buf) => {
     req.rawBody = buf.toString();
   },
 }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// ── Basic Abuse Protection ────────────────────────────────────
+// Keep these limits conservative to protect OpenAI costs.
+const authLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: Number(process.env.RATE_LIMIT_AUTH || 30),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.RATE_LIMIT_CHAT || 30),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth', authLimiter);
+app.use('/api/chat', chatLimiter);
 
 // ── Health / Route Map ────────────────────────────────────────
 app.get('/', (_req, res) => res.json({
