@@ -174,8 +174,8 @@ export function ChatWindow() {
   }, [sessionId, user?.id]);
 
   return (
-    <div className="flex h-[calc(100vh-6.5rem)] flex-col">
-      <div className="flex-1 overflow-y-auto px-1 pb-4 pt-4">
+    <div className="flex h-full flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-1 pb-4 pt-4">
         <div className="space-y-6">
           {isLoadingHistory ? (
             <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
@@ -216,31 +216,31 @@ export function ChatWindow() {
         </div>
       </div>
 
-      {chatError ? (
-        <div className="mb-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
-          <div>{chatError}</div>
-          {lastPrompt ? (
-            <div className="mt-3">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => handleSend(lastPrompt)}
-              >
-                Retry
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="sticky bottom-0 z-10 space-y-3 border-t border-zinc-200/60 bg-zinc-50/80 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-3 backdrop-blur dark:border-zinc-800/60 dark:bg-zinc-950/70">
+        {chatError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-100">
+            <div>{chatError}</div>
+            {lastPrompt ? (
+              <div className="mt-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleSend(lastPrompt)}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-      <div className="space-y-3 pb-2">
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {suggestedPrompts.map((prompt) => (
             <button
               key={prompt}
               onClick={() => handleSend(prompt)}
-              className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
+              className="shrink-0 rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-200 dark:hover:bg-zinc-900/40"
               type="button"
               disabled={isSending}
             >
@@ -248,6 +248,7 @@ export function ChatWindow() {
             </button>
           ))}
         </div>
+
         <ChatInput onSend={handleSend} isSending={isSending} />
       </div>
 

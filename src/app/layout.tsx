@@ -23,9 +23,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${manrope.variable} antialiased`}>
         <AppProviders>
-          <div className="min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+          <div className="flex min-h-screen flex-col bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
             <TopNav />
-            <main className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6">
+            <main className="mx-auto w-full max-w-5xl flex-1 min-h-0 px-4 py-6 sm:px-6">
               {children}
             </main>
           </div>
