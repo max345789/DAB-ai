@@ -10,8 +10,29 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "DAB AI",
-  description: "AI marketing agent platform dashboard",
+  metadataBase: new URL("https://dabcloud.in"),
+  title: {
+    default: "DAB AI",
+    template: "%s · DAB AI",
+  },
+  description: "DAB AI is an AI marketing agent that helps you capture leads, follow up automatically, and manage marketing tasks in one chat.",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    url: "https://dabcloud.in",
+    title: "DAB AI",
+    description:
+      "An AI marketing agent that helps you capture leads, follow up automatically, and manage marketing tasks in one chat.",
+    siteName: "DAB AI",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "DAB AI",
+    description:
+      "An AI marketing agent that helps you capture leads, follow up automatically, and manage marketing tasks in one chat.",
+  },
 };
 
 export default function RootLayout({
