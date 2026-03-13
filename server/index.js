@@ -32,7 +32,6 @@ const integrationRoutes = require('./routes/integrationRoutes');
 
 // ── Routes (Stage 6) ─────────────────────────────────────────
 const reportsRoutes     = require('./routes/reportsRoutes');
-const aiRoutes          = require('./routes/aiRoutes');
 const systemRoutes      = require('./routes/systemRoutes');
 const profileRoutes     = require('./routes/profileRoutes');
 
@@ -190,7 +189,6 @@ app.use('/api', campaignRoutes);
 app.use('/api', followupRoutes);
 app.use('/api', meetingRoutes);
 app.use('/api', financeRoutes);
-app.use('/api', aiRoutes);
 app.use('/api', profileRoutes);
 
 // ── API Routes (Auth-protected) ───────────────────────────────

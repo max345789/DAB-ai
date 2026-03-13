@@ -89,33 +89,7 @@ async function callAIProviderDirect(systemPrompt, userPrompt, opts = {}) {
 }
 
 async function callAI(systemPrompt, userPrompt, opts = {}) {
-  const redisUrl = process.env.REDIS_URL || '';
-  const hasRealRedis =
-    !!redisUrl &&
-    !(process.env.NODE_ENV === 'production' && /127\.0\.0\.1|localhost/.test(redisUrl));
-
-  const gatewayEnabled =
-    process.env.AI_GATEWAY_ENABLED !== 'false' &&
-    process.env.AI_WORKER_MODE !== 'true' &&
-    hasRealRedis;
-
-  if (gatewayEnabled) {
-    try {
-      // Lazy-load gateway client so production deployments without Redis
-      // do not crash at startup.
-      const { requestModelPrompt } = require('./aiGatewayClient');
-      return await requestModelPrompt({
-        systemPrompt,
-        userPrompt,
-        maxTokens: opts.maxTokens,
-        userId: opts.userId || null,
-        metadata: opts.metadata || {},
-      });
-    } catch (err) {
-      console.warn('[aiService] gateway call failed:', err.message);
-    }
-  }
-
+  // Direct provider only (OpenAI/Anthropic/Ollama). Queue/gateway pipeline removed.
   return callAIProviderDirect(systemPrompt, userPrompt, opts);
 }
 
@@ -136,9 +110,7 @@ If user asks for an action, return a direct action-oriented response in plain te
   if (reply) {
     return {
       reply,
-      source: process.env.AI_GATEWAY_ENABLED !== 'false' && process.env.AI_WORKER_MODE !== 'true'
-        ? 'gateway'
-        : PROVIDER,
+      source: PROVIDER,
       used_fallback: false,
     };
   }

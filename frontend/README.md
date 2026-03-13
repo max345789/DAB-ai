@@ -8,4 +8,4 @@ Relevant source directories:
 - `src/components`
 - `src/lib`
 
-This folder exists only as a service marker so the repository layout includes an explicit `frontend/` entry alongside `server/`, `ai-gateway/`, `ai-queue/`, `ai-worker/`, and `ai-shared/`.
+This folder exists only as a service marker so the repository layout includes an explicit `frontend/` entry alongside `server/`.
