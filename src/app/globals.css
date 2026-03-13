@@ -17,3 +17,39 @@
 body {
   font-family: var(--font-manrope), system-ui, sans-serif;
 }
+
+@keyframes dab-panda-walk {
+  0% {
+    transform: translateX(-10px);
+  }
+  100% {
+    transform: translateX(92px);
+  }
+}
+
+.dab-panda-walk {
+  animation: dab-panda-walk 1.6s linear infinite;
+}
+
+@keyframes dab-typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.2;
+  }
+  30% {
+    opacity: 0.9;
+  }
+}
+
+.dab-typing-dot {
+  animation: dab-typing-dot 1.2s ease-in-out infinite;
+}
+
+.dab-typing-dot-2 {
+  animation-delay: 0.15s;
+}
+
+.dab-typing-dot-3 {
+  animation-delay: 0.3s;
+}

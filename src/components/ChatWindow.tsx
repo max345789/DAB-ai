@@ -9,6 +9,8 @@ import { LeadForm } from "@/components/LeadForm";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/AuthProvider";
 import { Spinner } from "@/components/ui/Spinner";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { PandaWalk } from "@/components/ui/PandaWalk";
 
 const greeting: ChatMessage = {
   id: "greeting",
@@ -178,11 +180,44 @@ export function ChatWindow() {
       <div className="flex-1 overflow-y-auto overscroll-contain px-1 pb-4 pt-4">
         <div className="space-y-6">
           {isLoadingHistory ? (
-            <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/40 dark:text-zinc-300">
-              <span className="inline-flex items-center gap-2">
-                <Spinner className="h-4 w-4" />
-                Loading conversation…
-              </span>
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  DAB AI
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-11/12" />
+                    <Skeleton className="h-3 w-9/12" />
+                    <Skeleton className="h-3 w-7/12" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  You
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950/40">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-10/12" />
+                    <Skeleton className="h-3 w-6/12" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  DAB AI
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-8/12" />
+                    <Skeleton className="h-3 w-11/12" />
+                    <Skeleton className="h-3 w-5/12" />
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -204,8 +239,8 @@ export function ChatWindow() {
                 >
                   <div className="whitespace-pre-wrap">{message.content}</div>
                   {message.status === "processing" ? (
-                    <div className="mt-3 text-xs text-zinc-500">
-                      Thinking…
+                    <div className="mt-3">
+                      <PandaWalk />
                     </div>
                   ) : null}
                 </div>
