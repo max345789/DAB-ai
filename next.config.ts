@@ -6,24 +6,12 @@ import type { NextConfig } from "next";
  * Production:
  *   Set NEXT_PUBLIC_API_BASE=https://api.yourdomain.com/api in your
  *   hosting provider's environment variables panel.
- *
- * Local development:
- *   Create .env.local at the project root containing:
- *     NEXT_PUBLIC_API_BASE=http://localhost:5001/api
- *   Or leave it empty to use the /api proxy rewrite below which
- *   forwards all /api/* requests to the local backend at port 5001.
  */
 const nextConfig: NextConfig = {
-  async rewrites() {
-    // Only active in development when NEXT_PUBLIC_API_BASE is not set.
-    // In production this block is effectively bypassed because all fetch()
-    // calls use the full NEXT_PUBLIC_API_BASE URL.
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:5001/api/:path*",
-      },
-    ];
+  // Prevent Next from inferring a parent directory as the workspace root
+  // when other lockfiles exist on the machine.
+  turbopack: {
+    root: __dirname,
   },
 
   // Forward environment variable to the browser bundle

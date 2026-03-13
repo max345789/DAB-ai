@@ -11,7 +11,10 @@ const { sendEmail } = require('../services/integrations/emailService');
 const JWT_SECRET = process.env.JWT_SECRET || 'dab-ai-secret-change-in-prod';
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '7d';
 const RESET_TOKEN_TTL_MINS = Number(process.env.PASSWORD_RESET_TTL_MINS || 30);
-const APP_PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.ALLOWED_ORIGIN || 'http://localhost:3000';
+const APP_PUBLIC_URL =
+  process.env.APP_PUBLIC_URL ||
+  (process.env.ALLOWED_ORIGIN ? process.env.ALLOWED_ORIGIN.split(',')[0].trim() : '') ||
+  'https://app.dabcloud.in';
 
 function signToken(user) {
   return jwt.sign(

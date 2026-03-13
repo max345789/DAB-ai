@@ -11,7 +11,7 @@ export function getClientApiBase() {
     return "https://api.dabcloud.in/api";
   }
 
-  // Fallback for Vercel preview domains: keep relative to support local rewrites.
-  return "";
+  // Default all other hosts (including preview domains) to the production API.
+  // This avoids depending on dev-time proxy rewrites.
+  return "https://api.dabcloud.in/api";
 }
-

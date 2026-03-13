@@ -8,7 +8,7 @@
     "dev": "nodemon index.js",
     "build": "echo 'Node.js server — no build step required'",
     "lint": "node --check index.js",
-    "health": "curl -sf http://localhost:${PORT:-5000}/api/health || exit 1"
+    "health": "curl -sf \"${HEALTHCHECK_URL:-https://api.dabcloud.in/api/health}\" || exit 1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
