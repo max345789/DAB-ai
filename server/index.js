@@ -211,7 +211,7 @@ app.use((err, _req, res, _next) => {
 
 // ── Start ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`\n🚀  DAB AI v6.0 running on http://localhost:${PORT}`);
+  console.log(`\n🚀  DAB AI v6.0 listening on port ${PORT}`);
   console.log(`   AI Provider : ${PROVIDER}`);
   console.log(`   ENV         : ${process.env.NODE_ENV || 'development'}`);
   console.log(`   Stages      : 1 → 6 active\n`);

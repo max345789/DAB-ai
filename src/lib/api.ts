@@ -101,9 +101,9 @@ export type OptimizationSuggestion = {
 /**
  * API_BASE resolves to:
  *   – Production: the value of NEXT_PUBLIC_API_BASE (e.g. https://api.yourdomain.com/api)
- *   – Local dev:  empty string → fetch("/api/...") is rewritten by next.config.ts → localhost:5001
+ *   – Default: if not configured, we fall back to https://api.dabcloud.in/api
  *
- * All fetch paths below are relative to this base.
+ * All fetch paths below are relative to this base (i.e. `API_BASE + "/xyz"`).
  */
 import { getClientApiBase } from "@/lib/clientApiBase";
 
