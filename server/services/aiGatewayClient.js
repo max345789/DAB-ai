@@ -1,7 +1,9 @@
 const { AI_TASKS } = require('../../ai-shared/taskTypes');
 const { validateAIRequestBody } = require('../../ai-shared/validation');
 const { getTaskState, waitForTaskResult } = require('../../ai-queue/queue');
+const { enqueueTask, enforceUserRateLimit } = require('../../ai-queue/queue');
 
+const HAS_EXPLICIT_GATEWAY_URL = Object.prototype.hasOwnProperty.call(process.env, 'AI_GATEWAY_URL');
 const AI_GATEWAY_URL = process.env.AI_GATEWAY_URL || 'http://localhost:4100';
 const AI_GATEWAY_KEY =
   process.env.AI_GATEWAY_KEY ||
@@ -17,6 +19,26 @@ async function submitAITask({ task = AI_TASKS.MODEL_PROMPT, userId = null, paylo
 
   if (!validation.ok) {
     throw new Error(validation.errors.join('; '));
+  }
+
+  // Embedded gateway mode:
+  // If AI_GATEWAY_URL is not explicitly set, we treat the backend as the gateway and
+  // enqueue directly into Redis. This avoids having to deploy a separate gateway service.
+  if (!HAS_EXPLICIT_GATEWAY_URL || (process.env.AI_GATEWAY_EMBEDDED || '').toLowerCase() === 'true') {
+    const rate = await enforceUserRateLimit(userId || 'anonymous', Number(process.env.AI_USER_HOURLY_LIMIT || 20));
+    if (!rate.allowed) {
+      const error = new Error(`AI task rate limit exceeded (max ${rate.limit}/hr)`);
+      error.status = 429;
+      throw error;
+    }
+
+    const queued = await enqueueTask({ task, userId, payload, metadata });
+    return {
+      task_id: queued.taskId,
+      status: queued.status,
+      queued_at: queued.createdAt,
+      cached: queued.cached || false,
+    };
   }
 
   if (!AI_GATEWAY_KEY) {
